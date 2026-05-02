@@ -1,0 +1,53 @@
+import { Router } from 'express';
+import authRoutes from './auth.routes';
+import usersRoutes from './users.routes';
+import rolesRoutes from './roles.routes';
+import permissionsRoutes from './permissions.routes';
+import modulesRoutes from './modules.routes';
+import departmentsRoutes from './departments.routes';
+import subDepartmentsRoutes from './subDepartments.routes';
+import leavesRoutes from './leaves.routes';
+import leaveTypesRoutes from './leaveTypes.routes';
+import delegationsRoutes from './delegations.routes';
+import notificationsRoutes from './notifications.routes';
+import auditRoutes from './audit.routes';
+import reportsRoutes from './reports.routes';
+import announcementsRoutes from './announcements.routes';
+import messagesRoutes from './messages.routes';
+import statusRoutes from './status.routes';
+
+import simulatorRoutes from './simulator.routes';
+import proxyRoutes from './proxyRequests.routes';
+import telegramRoutes from './telegram.routes';
+import publicHolidaysRoutes from './publicHolidays.routes';
+import blackoutRoutes from './blackout.routes';
+import preferencesRoutes from './preferences.routes';
+import userPermissionsRoutes from './userPermissions.routes';
+
+const router = Router();
+
+router.use('/auth', authRoutes);
+router.use('/users', usersRoutes);
+router.use('/roles', rolesRoutes);
+router.use('/permissions', permissionsRoutes);
+router.use('/modules', modulesRoutes);
+router.use('/departments', departmentsRoutes);
+router.use('/sub-departments', subDepartmentsRoutes);
+router.use('/leaves', leavesRoutes);
+router.use('/leave-types', leaveTypesRoutes);
+router.use('/delegations', delegationsRoutes);
+router.use('/notifications', notificationsRoutes);
+router.use('/audit', auditRoutes);
+router.use('/reports', reportsRoutes);
+router.use('/announcements', announcementsRoutes);
+router.use('/conversations', messagesRoutes);
+router.use('/status', statusRoutes);
+router.use('/simulator', simulatorRoutes);
+router.use('/proxy-requests', proxyRoutes);
+router.use('/telegram', telegramRoutes);
+router.use('/public-holidays', publicHolidaysRoutes);
+router.use('/blackout-periods', blackoutRoutes);
+router.use('/preferences', preferencesRoutes);
+router.use('/user-permissions', userPermissionsRoutes);
+
+export default router;

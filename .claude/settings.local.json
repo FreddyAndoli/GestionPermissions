@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm audit *)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(echo \"PID $!\")",
+      "Bash(curl -s http://localhost:4000/health)",
+      "Bash(cat C:\\\\\\\\Users\\\\\\\\Freddy\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\C--Users-Freddy-Desktop-GestionPermission-GestionPerm\\\\\\\\a6085d1a-2786-4b4f-b207-9d2aaedf73f4\\\\\\\\tasks\\\\\\\\biihjpn86.output)",
+      "Bash(netstat -ano)",
+      "Bash(kill 21760)",
+      "Bash(fuser -k 4000/tcp)",
+      "Bash(awk '{print $NF}')",
+      "Bash(taskkill /PID 21760 /F)",
+      "PowerShell(Stop-Process *)",
+      "Bash(curl -s http://localhost:4000/api/v1/roles?limit=1)",
+      "Bash(tasklist)",
+      "Bash(ps -p 6256 -o comm=)",
+      "Bash(curl -s http://localhost:4000/api/v1/users?limit=1)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(curl -s http://localhost:4000/api/v1/departments?limit=1)",
+      "Bash(ps -p 18608 -o comm=,args=)",
+      "Bash(taskkill /F /PID 18608)",
+      "Bash(curl -s http://localhost:4000/api/v1/auth/me -H \"Authorization: Bearer dev\" -H \"x-dev-mode: true\" -H \"x-dev-user-email: admin@example.com\")",
+      "Bash(curl -s http://localhost:4000/api/v1/users?limit=5 -H \"Authorization: Bearer dev\" -H \"x-dev-mode: true\" -H \"x-dev-user-email: test@example.com\")",
+      "Bash(curl -s http://localhost:4000/api/v1/auth/me -H \"Authorization: Bearer dev\" -H \"x-dev-mode: true\" -H \"x-dev-user-email: admin@permissionmanager.com\")",
+      "Bash(mysql -u root -e \"SELECT 1\")",
+      "Bash(mysql -u pm_user -ppassword -e \"SELECT 1\")",
+      "Bash(mysql *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:4000/api/v1/health)",
+      "Bash(curl *)",
+      "Bash(mysqladmin ping *)",
+      "Bash(redis-cli ping *)"
+    ]
+  }
+}
