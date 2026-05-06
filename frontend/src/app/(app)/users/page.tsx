@@ -146,8 +146,8 @@ export default function UsersPage() {
                 link.click();
                 link.remove();
                 window.URL.revokeObjectURL(url);
-              } catch {
-                // ignore
+              } catch (err: any) {
+                console.error('CSV export error', err);
               }
             }}
             className="inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-700 border dark:border-slate-600 rounded-lg text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50"
@@ -172,7 +172,7 @@ export default function UsersPage() {
         <div className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 flex items-start justify-between gap-4">
           <div className="text-sm text-green-800 dark:text-green-300">
             <p className="font-semibold">Utilisateur cree avec succes</p>
-            <p>L utilisateur peut se connecter avec : <strong>{createdInfo.email}</strong> / <strong>{createdInfo.password}</strong></p>
+            <p>L utilisateur peut se connecter avec : <strong>{createdInfo.email}</strong></p>
           </div>
           <button
             onClick={() => setCreatedInfo(null)}

@@ -7,11 +7,13 @@ import {
 import { createLeaveRequestSchema } from '../schemas/leave.schema';
 import { logger } from '../utils/logger';
 import { generateCSV, downloadCSV } from '../services/csv.service';
+import { parseId } from '../utils/asyncHandler';
 
 export const exportLeavesCSV = async (req: Request, res: Response) => {
   try {
     const { status, userId, type, dateFrom, dateTo } = req.query;
     const rows = await listLeaveRequests({
+      organizationId: req.user!.organizationId,
       userId: userId ? parseInt(userId as string) : undefined,
       status: status as string,
       type: type ? parseInt(type as string) : undefined,
@@ -43,7 +45,7 @@ export const exportLeavesCSV = async (req: Request, res: Response) => {
 
 export const myLeaves = async (req: Request, res: Response) => {
   try {
-    const rows = await listLeaveRequests({ userId: req.user!.id });
+    const rows = await listLeaveRequests({ organizationId: req.user!.organizationId, userId: req.user!.id });
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch my leaves' });
@@ -54,6 +56,7 @@ export const getLeaves = async (req: Request, res: Response) => {
   try {
     const { status, userId, type, dateFrom, dateTo } = req.query;
     const rows = await listLeaveRequests({
+      organizationId: req.user!.organizationId,
       userId: userId ? parseInt(userId as string) : undefined,
       status: status as string,
       type: type ? parseInt(type as string) : undefined,
@@ -68,8 +71,8 @@ export const getLeaves = async (req: Request, res: Response) => {
 
 export const getLeave = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
-    const row = await getLeaveRequest(id);
+    const id = parseId(req.params.id);
+    const row = await getLeaveRequest(id, req.user!.organizationId);
     if (!row) { res.status(404).json({ error: 'Not found' }); return; }
     res.json(row);
   } catch (err) {
@@ -95,9 +98,9 @@ export const createLeave = async (req: Request, res: Response) => {
 
 export const approve = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseId(req.params.id);
     const { comment } = req.body;
-    const row = await approveLeave(id, req.user!.id, comment);
+    const row = await approveLeave(id, req.user!.id, comment, false, req.user!.organizationId);
     res.json(row);
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Failed to approve' });
@@ -106,9 +109,9 @@ export const approve = async (req: Request, res: Response) => {
 
 export const reject = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseId(req.params.id);
     const { comment } = req.body;
-    const row = await rejectLeave(id, req.user!.id, comment);
+    const row = await rejectLeave(id, req.user!.id, comment, false, req.user!.organizationId);
     res.json(row);
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Failed to reject' });
@@ -117,9 +120,9 @@ export const reject = async (req: Request, res: Response) => {
 
 export const directorApprove = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseId(req.params.id);
     const { comment } = req.body;
-    const row = await directorApproveLeave(id, req.user!.id, comment);
+    const row = await directorApproveLeave(id, req.user!.id, comment, req.user!.organizationId);
     res.json(row);
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Failed to director approve' });
@@ -128,9 +131,9 @@ export const directorApprove = async (req: Request, res: Response) => {
 
 export const directorReject = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseId(req.params.id);
     const { comment } = req.body;
-    const row = await directorRejectLeave(id, req.user!.id, comment);
+    const row = await directorRejectLeave(id, req.user!.id, comment, req.user!.organizationId);
     res.json(row);
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Failed to director reject' });
@@ -139,7 +142,7 @@ export const directorReject = async (req: Request, res: Response) => {
 
 export const leaveCommentsList = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseId(req.params.id);
     const rows = await getLeaveComments(id);
     res.json(rows);
   } catch (err) {
@@ -149,7 +152,7 @@ export const leaveCommentsList = async (req: Request, res: Response) => {
 
 export const leaveHistory = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseId(req.params.id);
     const rows = await getLeaveHistory(id);
     res.json(rows);
   } catch (err) {
@@ -161,6 +164,7 @@ export const teamCalendar = async (req: Request, res: Response) => {
   try {
     const { month, year, departmentId, userId } = req.query;
     const rows = await getTeamCalendar({
+      organizationId: req.user!.organizationId,
       departmentId: departmentId ? parseInt(departmentId as string) : undefined,
       userId: userId ? parseInt(userId as string) : undefined,
       currentUserId: req.user!.id,
@@ -175,8 +179,8 @@ export const teamCalendar = async (req: Request, res: Response) => {
 
 export const balance = async (req: Request, res: Response) => {
   try {
-    const targetUserId = req.query.userId ? parseInt(req.query.userId as string) : req.user!.id;
-    const rows = await getLeaveBalance(targetUserId);
+    const targetUserId = req.query.userId ? parseId(req.query.userId as string, 'userId') : req.user!.id;
+    const rows = await getLeaveBalance(targetUserId, req.user!.organizationId);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch balance' });

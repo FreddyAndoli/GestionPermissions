@@ -5,7 +5,7 @@ export const createLeaveRequestSchema = z.object({
   periods: z.array(z.object({
     startDate: z.string(),
     endDate: z.string()
-  })).min(1),
+  })).min(1).max(12),
   reason: z.string().optional(),
   replacementUserId: z.number().optional(),
   isProxyRequest: z.boolean().default(false)

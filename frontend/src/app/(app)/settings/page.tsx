@@ -5,17 +5,19 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { useDensity } from '@/hooks/useDensity';
+import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
 import apiClient from '@/lib/apiClient';
 import { auth } from '@/lib/firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { QRCodeSVG } from 'qrcode.react';
-import { Save, Sun, Moon, Monitor, Smartphone, Mail, MessageCircle, User, Lock, Eye, EyeOff, Hash, Link, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Save, Sun, Moon, Monitor, Smartphone, Mail, MessageCircle, User, Lock, Eye, EyeOff, Hash, Link, CheckCircle, ChevronDown, ChevronUp, Building2 } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const { user, organization, loading: authLoading, isAuthenticated } = useAuth();
   const { theme, setTheme } = useTheme();
   const { density, setDensity } = useDensity();
+  const { isAdmin } = usePermissions();
   const queryClient = useQueryClient();
 
   const [firstName, setFirstName] = useState(user?.firstName || '');
@@ -39,13 +41,17 @@ export default function SettingsPage() {
   const [botInfo, setBotInfo] = useState<any>(null);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [orgName, setOrgName] = useState('');
+  const [orgNameLoading, setOrgNameLoading] = useState(false);
+  const [orgNameError, setOrgNameError] = useState('');
+  const [orgNameSuccess, setOrgNameSuccess] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
     apiClient.get('/preferences')
       .then(({ data }) => { if (!cancelled) { setPreferences(data); setPrefsLoaded(true); } })
-      .catch(() => { if (!cancelled) setPrefsLoaded(true); });
+      .catch((err: any) => { if (!cancelled) setPrefsLoaded(true); console.error('Preferences load error', err); });
     return () => { cancelled = true; };
   }, [isAuthenticated]);
 
@@ -54,7 +60,7 @@ export default function SettingsPage() {
     let cancelled = false;
     apiClient.get('/telegram/bot-info')
       .then(({ data }) => { if (!cancelled) setBotInfo(data); })
-      .catch(() => {});
+      .catch((err: any) => { console.error('Bot info load error', err); });
     return () => { cancelled = true; };
   }, [isAuthenticated]);
 
@@ -65,6 +71,12 @@ export default function SettingsPage() {
       setAvatarUrl(user.avatarUrl || '');
     }
   }, [user]);
+
+  useEffect(() => {
+    if (organization) {
+      setOrgName(organization.name || '');
+    }
+  }, [organization]);
 
   useEffect(() => {
     if (preferences) {
@@ -101,6 +113,22 @@ export default function SettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['preferences'] });
+    }
+  });
+
+  const updateOrganization = useMutation({
+    mutationFn: async () => {
+      if (!isAuthenticated || !organization) throw new Error('Non authentifie');
+      await apiClient.put(`/organizations/${organization.id}`, { name: orgName });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth-me'] });
+      setOrgNameSuccess('Nom de l organisation mis a jour');
+      setTimeout(() => setOrgNameSuccess(''), 3000);
+    },
+    onError: (err: any) => {
+      setOrgNameError(err.response?.data?.error || 'Erreur lors de la mise a jour');
+      setTimeout(() => setOrgNameError(''), 5000);
     }
   });
 
@@ -214,6 +242,51 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+
+        {/* Organisation */}
+        {organization && (
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border dark:border-slate-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Building2 size={18} /> Organisation
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Nom de l entreprise
+                </label>
+                <input
+                  type="text"
+                  value={orgName}
+                  onChange={(e) => {
+                    setOrgName(e.target.value);
+                    setOrgNameError('');
+                    setOrgNameSuccess('');
+                  }}
+                  readOnly={!isAdmin()}
+                  className={`w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none ${
+                    !isAdmin() ? 'cursor-not-allowed opacity-70' : ''
+                  }`}
+                />
+                {!isAdmin() && (
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                    Seul le Super Admin peut modifier ce champ.
+                  </p>
+                )}
+              </div>
+              {orgNameError && <p className="text-sm text-red-600">{orgNameError}</p>}
+              {orgNameSuccess && <p className="text-sm text-green-600">{orgNameSuccess}</p>}
+              {isAdmin() && (
+                <button
+                  onClick={() => updateOrganization.mutate()}
+                  disabled={updateOrganization.isPending || !orgName.trim()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  <Save size={14} /> Enregistrer
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Apparence */}
         <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border dark:border-slate-700">

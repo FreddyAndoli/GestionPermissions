@@ -23,8 +23,8 @@ export default function ForgotPasswordPage() {
       if (!auth) return;
       await sendPasswordResetEmail(auth, email);
       setSent(true);
-    } catch {
-      // ignore
+    } catch (err: any) {
+      console.error('Password reset error', err);
     } finally {
       setLoading(false);
     }

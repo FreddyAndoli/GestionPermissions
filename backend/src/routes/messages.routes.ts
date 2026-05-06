@@ -4,10 +4,11 @@ import { db } from '../config/db';
 import { conversations, conversationParticipants, messages, users } from '../db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { Request, Response } from 'express';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
   const participantRows = await db
     .select({ conversationId: conversationParticipants.conversationId })
     .from(conversationParticipants)
@@ -37,9 +38,9 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
   }
 
   res.json(enriched);
-});
+}));
 
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
   const { participantIds, title } = req.body;
   const allIds = [...new Set([...participantIds, req.user!.id])];
 
@@ -52,9 +53,9 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 
   const [row] = await db.select().from(conversations).where(eq(conversations.id, convId)).limit(1);
   res.status(201).json(row);
-});
+}));
 
-router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.get('/:id', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
   const id = parseInt(req.params.id);
 
   const [participant] = await db
@@ -80,9 +81,9 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
     .where(eq(conversationParticipants.conversationId, id));
 
   res.json({ conversation: conv[0], messages: msgs, participants });
-});
+}));
 
-router.post('/:id/messages', authMiddleware, async (req: Request, res: Response) => {
+router.post('/:id/messages', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
   const id = parseInt(req.params.id);
   const { content } = req.body;
 
@@ -107,6 +108,6 @@ router.post('/:id/messages', authMiddleware, async (req: Request, res: Response)
   });
   const [row] = await db.select().from(messages).where(eq(messages.id, result.insertId)).limit(1);
   res.status(201).json(row);
-});
+}));
 
 export default router;

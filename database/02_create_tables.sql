@@ -157,7 +157,7 @@ AFTER department_id;
 
 -- Ensure index exists for FK performance
 ALTER TABLE users
-ADD INDEX IF NOT EXISTS idx_users_sub_department (sub_department_id);
+ADD INDEX idx_users_sub_department (sub_department_id);
 
 -- 11. department_members
 CREATE TABLE IF NOT EXISTS department_members (

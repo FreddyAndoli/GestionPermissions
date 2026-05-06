@@ -14,6 +14,8 @@ export const addNotificationJob = async (userId: number, event: string, payload:
     timestamp: new Date().toISOString()
   }, {
     attempts: 3,
-    backoff: { type: 'exponential', delay: 5000 }
+    backoff: { type: 'exponential', delay: 5000 },
+    removeOnComplete: { age: 86400, count: 100 },
+    removeOnFail: { age: 604800, count: 50 }
   });
 };

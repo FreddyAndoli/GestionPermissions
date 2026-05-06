@@ -19,8 +19,10 @@ export const listDepartments = async (organizationId: number) => {
   return result;
 };
 
-export const getDepartmentById = async (id: number) => {
-  const [dept] = await db.select().from(departments).where(eq(departments.id, id)).limit(1);
+export const getDepartmentById = async (id: number, organizationId?: number) => {
+  const conditions = [eq(departments.id, id)];
+  if (organizationId !== undefined) conditions.push(eq(departments.organizationId, organizationId));
+  const [dept] = await db.select().from(departments).where(and(...conditions)).limit(1);
   if (!dept) return null;
 
   const members = await db
@@ -52,7 +54,10 @@ export const createDepartment = async (input: { name: string; description?: stri
   return getDepartmentById(result.insertId);
 };
 
-export const updateDepartment = async (id: number, input: { name?: string; description?: string; managerId?: number | null }) => {
+export const updateDepartment = async (id: number, input: { name?: string; description?: string; managerId?: number | null }, organizationId?: number) => {
+  const where = organizationId !== undefined
+    ? and(eq(departments.id, id), eq(departments.organizationId, organizationId))
+    : eq(departments.id, id);
   if (input.managerId !== undefined) {
     // Ensure manager is not already manager of another department
     if (input.managerId) {
@@ -63,11 +68,16 @@ export const updateDepartment = async (id: number, input: { name?: string; descr
       await db.update(users).set({ departmentId: id }).where(eq(users.id, input.managerId));
     }
   }
-  await db.update(departments).set(input).where(eq(departments.id, id));
-  return getDepartmentById(id);
+  await db.update(departments).set(input).where(where);
+  return getDepartmentById(id, organizationId);
 };
 
-export const deleteDepartment = async (id: number) => {
+export const deleteDepartment = async (id: number, organizationId?: number) => {
+  const conditions = [eq(departmentMembers.departmentId, id)];
+  const deptWhere = organizationId !== undefined
+    ? and(eq(departments.id, id), eq(departments.organizationId, organizationId))
+    : eq(departments.id, id);
+
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(departmentMembers)
@@ -76,7 +86,7 @@ export const deleteDepartment = async (id: number) => {
   if (count > 0) throw new Error('Cannot delete department with active members');
 
   await db.delete(departmentRoles).where(eq(departmentRoles.departmentId, id));
-  await db.delete(departments).where(eq(departments.id, id));
+  await db.delete(departments).where(deptWhere);
 };
 
 export const addDepartmentMembers = async (departmentId: number, userIds: number[]) => {

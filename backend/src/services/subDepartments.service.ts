@@ -1,5 +1,5 @@
 import { db } from '../config/db';
-import { subDepartments, subDepartmentMembers, users } from '../db/schema';
+import { subDepartments, subDepartmentMembers, users, departments } from '../db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { invalidateUserPermissions } from './permissionsResolver.service';
 
@@ -19,7 +19,17 @@ export const listSubDepartments = async (departmentId: number) => {
   return result;
 };
 
-export const getSubDepartmentById = async (id: number) => {
+export const getSubDepartmentById = async (id: number, organizationId?: number) => {
+  let conditions: any[] = [eq(subDepartments.id, id)];
+  if (organizationId !== undefined) {
+    const [dept] = await db
+      .select()
+      .from(departments)
+      .innerJoin(subDepartments, eq(subDepartments.departmentId, departments.id))
+      .where(and(eq(subDepartments.id, id), eq(departments.organizationId, organizationId)))
+      .limit(1);
+    if (!dept) return null;
+  }
   const [sub] = await db.select().from(subDepartments).where(eq(subDepartments.id, id)).limit(1);
   if (!sub) return null;
 
@@ -46,7 +56,11 @@ export const createSubDepartment = async (input: { name: string; description?: s
   return getSubDepartmentById(result.insertId);
 };
 
-export const updateSubDepartment = async (id: number, input: { name?: string; description?: string; departmentId?: number; managerId?: number | null }) => {
+export const updateSubDepartment = async (id: number, input: { name?: string; description?: string; departmentId?: number; managerId?: number | null }, organizationId?: number) => {
+  if (organizationId !== undefined) {
+    const dept = await getSubDepartmentById(id, organizationId);
+    if (!dept) throw new Error('Sub department not found');
+  }
   if (input.managerId !== undefined) {
     if (input.managerId) {
       const [existing] = await db.select().from(subDepartments).where(eq(subDepartments.managerId, input.managerId)).limit(1);
@@ -57,10 +71,14 @@ export const updateSubDepartment = async (id: number, input: { name?: string; de
     }
   }
   await db.update(subDepartments).set(input).where(eq(subDepartments.id, id));
-  return getSubDepartmentById(id);
+  return getSubDepartmentById(id, organizationId);
 };
 
-export const deleteSubDepartment = async (id: number) => {
+export const deleteSubDepartment = async (id: number, organizationId?: number) => {
+  if (organizationId !== undefined) {
+    const dept = await getSubDepartmentById(id, organizationId);
+    if (!dept) throw new Error('Sub department not found');
+  }
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(subDepartmentMembers)

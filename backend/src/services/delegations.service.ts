@@ -2,13 +2,18 @@ import { db } from '../config/db';
 import { delegations, users, departments, auditLogs } from '../db/schema';
 import { eq, and, gte, lte, sql } from 'drizzle-orm';
 
-export const listDelegations = async (filters: { managerId?: number; active?: boolean }) => {
-  const conditions = [];
+export const listDelegations = async (filters: { organizationId: number; managerId?: number; active?: boolean }) => {
+  const conditions = [eq(users.organizationId, filters.organizationId)];
   if (filters.managerId) conditions.push(eq(delegations.managerId, filters.managerId));
   if (filters.active !== undefined) conditions.push(eq(delegations.isActive, filters.active));
 
-  const where = conditions.length > 0 ? and(...conditions) : undefined;
-  const rows = await db.select().from(delegations).where(where!);
+  const where = and(...conditions);
+  const rows = await db
+    .select()
+    .from(delegations)
+    .innerJoin(users, eq(users.id, delegations.managerId))
+    .where(where)
+    .then((results) => results.map((r) => r.delegations));
 
   const result = [];
   for (const d of rows) {

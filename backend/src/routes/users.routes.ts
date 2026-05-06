@@ -3,6 +3,7 @@ import { authMiddleware } from '../middlewares/auth.middleware';
 import { rateLimitMiddleware } from '../middlewares/rateLimit.middleware';
 import { requirePermission } from '../middlewares/role.middleware';
 import { getUsers, getUser, createNewUser, updateUserById, deactivateUser, exportUsersCSV, bulkCreateUsersController, updateUserRolesController, resetPasswordController } from '../controllers/users.controller';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
@@ -19,11 +20,11 @@ router.post('/bulk', authMiddleware, requirePermission('users.create'), bulkCrea
 router.put('/:id/roles', authMiddleware, requirePermission('users.update'), updateUserRolesController);
 router.post('/:id/reset-password', authMiddleware, requirePermission('users.update'), resetPasswordController);
 
-router.get('/:id/sessions', authMiddleware, requirePermission('users.read'), async (_req, res) => {
+router.get('/:id/sessions', authMiddleware, requirePermission('users.read'), asyncHandler(async (_req, res) => {
   res.json({ sessions: [] });
-});
-router.delete('/:id/sessions', authMiddleware, requirePermission('users.update'), async (_req, res) => {
+}));
+router.delete('/:id/sessions', authMiddleware, requirePermission('users.update'), asyncHandler(async (_req, res) => {
   res.json({ message: 'Sessions revoked' });
-});
+}));
 
 export default router;

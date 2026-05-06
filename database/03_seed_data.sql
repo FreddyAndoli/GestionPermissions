@@ -168,19 +168,3 @@ INSERT INTO public_holidays (organization_id, name, holiday_date, country_code, 
 
 
 USE permission_manager;
-
-  INSERT INTO modules (organization_id, slug, name, description)
-  SELECT id, 'leave_types', 'Types de conges', 'Gestion des types de conges'
-  FROM organizations LIMIT 1;
-
-  SET @mod_lt = (SELECT id FROM modules WHERE slug = 'leave_types' LIMIT 1);
-
-  INSERT INTO permissions (module_id, slug, name, action) VALUES
-    (@mod_lt, 'leave_types.create', 'Creer un type de conge', 'create'),
-    (@mod_lt, 'leave_types.read', 'Voir les types de conges', 'read'),
-    (@mod_lt, 'leave_types.update', 'Modifier un type de conge', 'update'),
-    (@mod_lt, 'leave_types.delete', 'Supprimer un type de conge', 'delete');
-
-  SET @role_sa = (SELECT id FROM roles WHERE name = 'Super Admin' LIMIT 1);
-  INSERT INTO role_permissions (role_id, permission_id)
-  SELECT @role_sa, id FROM permissions WHERE slug LIKE 'leave_types.%';

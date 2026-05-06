@@ -10,6 +10,7 @@ import {
   TreePine
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useAuth } from '@/hooks/useAuth';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, perm: null, tour: 'dashboard' },
@@ -33,11 +34,14 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { hasPermission, isAdmin } = usePermissions();
+  const { organization } = useAuth();
 
   return (
     <aside className="w-64 h-screen bg-[#1E1B4B] text-[#C7D2FE] flex flex-col fixed left-0 top-0 z-40">
       <div className="h-16 flex items-center px-6 border-b border-white/10">
-        <span className="text-lg font-bold text-white">Permission Manager</span>
+        <span className="text-lg font-bold text-white truncate">
+          {organization?.name || 'Permission Manager'}
+        </span>
       </div>
       <nav className="flex-1 overflow-y-auto py-4">
         {navItems.map((item) => {

@@ -7,8 +7,10 @@ export const listRoles = async (organizationId: number) => {
   return db.select().from(roles).where(eq(roles.organizationId, organizationId));
 };
 
-export const getRoleById = async (id: number) => {
-  const [role] = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
+export const getRoleById = async (id: number, organizationId?: number) => {
+  const conditions = [eq(roles.id, id)];
+  if (organizationId !== undefined) conditions.push(eq(roles.organizationId, organizationId));
+  const [role] = await db.select().from(roles).where(and(...conditions)).limit(1);
   if (!role) return null;
   const perms = await db
     .select({ id: permissions.id, slug: permissions.slug, name: permissions.name, action: permissions.action, moduleId: permissions.moduleId })
@@ -35,8 +37,11 @@ export const createRole = async (input: { name: string; description?: string; or
   return getRoleById(roleId);
 };
 
-export const updateRole = async (id: number, input: { name?: string; description?: string; permissionIds?: number[] }) => {
-  await db.update(roles).set(input).where(eq(roles.id, id));
+export const updateRole = async (id: number, input: { name?: string; description?: string; permissionIds?: number[] }, organizationId?: number) => {
+  const where = organizationId !== undefined
+    ? and(eq(roles.id, id), eq(roles.organizationId, organizationId))
+    : eq(roles.id, id);
+  await db.update(roles).set(input).where(where);
 
   if (input.permissionIds !== undefined) {
     await db.delete(rolePermissions).where(eq(rolePermissions.roleId, id));
@@ -53,16 +58,18 @@ export const updateRole = async (id: number, input: { name?: string; description
     await invalidateUserPermissions(u.userId);
   }
 
-  return getRoleById(id);
+  return getRoleById(id, organizationId);
 };
 
-export const deleteRole = async (id: number) => {
-  const [role] = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
+export const deleteRole = async (id: number, organizationId?: number) => {
+  const conditions = [eq(roles.id, id)];
+  if (organizationId !== undefined) conditions.push(eq(roles.organizationId, organizationId));
+  const [role] = await db.select().from(roles).where(and(...conditions)).limit(1);
   if (role?.isSystem) throw new Error('Cannot delete system role');
 
   await db.delete(rolePermissions).where(eq(rolePermissions.roleId, id));
   await db.delete(userRoles).where(eq(userRoles.roleId, id));
-  await db.delete(roles).where(eq(roles.id, id));
+  await db.delete(roles).where(and(...conditions));
 };
 
 export const listPermissions = async (organizationId?: number) => {

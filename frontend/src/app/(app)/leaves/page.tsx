@@ -87,8 +87,8 @@ export default function LeavesPage() {
                 link.click();
                 link.remove();
                 window.URL.revokeObjectURL(url);
-              } catch {
-                // ignore
+              } catch (err: any) {
+                console.error('CSV export error', err);
               }
             }}
             className="inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-700 border dark:border-slate-600 rounded-lg text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50"

@@ -38,7 +38,8 @@ export default function ProfilePage() {
       try {
         const { data } = await apiClient.get(`/leaves?userId=${user?.id}&limit=1`);
         return data;
-      } catch {
+      } catch (err: any) {
+        console.error('Leave stats error', err);
         return null;
       }
     },
@@ -115,7 +116,7 @@ export default function ProfilePage() {
             <div className="relative -mt-16 mb-4">
               <div className="w-32 h-32 rounded-xl border-4 border-white dark:border-slate-800 bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-3xl font-bold text-indigo-600 dark:text-indigo-400 overflow-hidden shadow-lg">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt={initials} className="w-full h-full object-cover" />
+                  <img src={avatarUrl} alt={initials} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   initials
                 )}

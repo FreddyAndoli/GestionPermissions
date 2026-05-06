@@ -27,3 +27,9 @@ storage/
 .DS_Store
 Thumbs.db
 gestionpermission-firebase-adminsdk-*.json
+
+# admin mic
+admin.md
+
+# Database files with credentials
+database/04_create_admin.sql

@@ -36,12 +36,19 @@ export const createProxyRequest = async (input: {
   return row;
 };
 
-export const listProxyRequests = async (userId: number) => {
+export const listProxyRequests = async (userId: number, organizationId: number) => {
   const rows = await db
     .select()
     .from(proxyRequests)
-    .where(or(eq(proxyRequests.proxyUserId, userId), eq(proxyRequests.beneficiaryUserId, userId)))
-    .orderBy(proxyRequests.createdAt);
+    .where(
+      and(
+        or(eq(proxyRequests.proxyUserId, userId), eq(proxyRequests.beneficiaryUserId, userId)),
+        eq(users.organizationId, organizationId)
+      )
+    )
+    .innerJoin(users, eq(users.id, proxyRequests.proxyUserId))
+    .orderBy(proxyRequests.createdAt)
+    .then((results) => results.map((r) => r.proxy_requests));
 
   const enriched = [];
   for (const r of rows) {

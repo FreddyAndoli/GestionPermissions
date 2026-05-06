@@ -20,12 +20,16 @@ apiClient.interceptors.request.use(async (config) => {
   }
 
   const devEmail = typeof window !== 'undefined' ? localStorage.getItem('devUserEmail') : null;
+  const devToken = typeof window !== 'undefined' ? localStorage.getItem('devToken') : null;
+  const devSecret = process.env.NEXT_PUBLIC_DEV_SECRET;
 
-  if (devEmail) {
-    // Dev mode takes priority over Firebase auth
-    config.headers.Authorization = 'Bearer dev';
+  if (devEmail && devToken) {
+    config.headers.Authorization = `Bearer ${devToken}`;
     config.headers['x-dev-mode'] = 'true';
     config.headers['x-dev-user-email'] = devEmail;
+    if (devSecret) {
+      config.headers['x-dev-secret'] = devSecret;
+    }
   } else if (auth?.currentUser) {
     const token = await auth.currentUser.getIdToken(true);
     config.headers.Authorization = `Bearer ${token}`;

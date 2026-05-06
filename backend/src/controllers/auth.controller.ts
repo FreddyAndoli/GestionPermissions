@@ -2,12 +2,13 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { db } from '../config/db';
 import { users, invitations, roles, userRoles, leaveQuotas, leaveTypes, organizations } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { firebaseAuth } from '../config/firebase';
 import { getRedisClient } from '../config/redis';
 import { syncFirebaseUser, getCurrentUser, logoutUser, handleLoginAttempt, unblockUser, registerUser } from '../services/auth.service';
 import { logger } from '../utils/logger';
 import { resolveEffectivePermissions } from '../services/permissionsResolver.service';
+import { parseId } from '../utils/asyncHandler';
 
 const REDIS_SESSION_TTL = parseInt(process.env.REDIS_SESSION_TTL || '3600');
 const IS_DEV = process.env.NODE_ENV === 'development';
@@ -21,11 +22,11 @@ export const syncUser = async (req: Request, res: Response) => {
     }
 
     const token = authHeader.substring(7);
-    const devModeHeader = req.headers['x-dev-mode'] as string | undefined;
-    const isExplicitDevMode = IS_DEV && devModeHeader === 'true';
+    const devSecretHeader = req.headers['x-dev-secret'] as string | undefined;
+    const isDevBypass = IS_DEV && process.env.DEV_SECRET && devSecretHeader === process.env.DEV_SECRET;
 
-    // Dev bypass: when Firebase is not configured in development, or explicit dev mode header
-    if ((!firebaseAuth && IS_DEV) || isExplicitDevMode) {
+    // Dev bypass: only in development with matching DEV_SECRET
+    if ((!firebaseAuth && IS_DEV && isDevBypass) || isDevBypass) {
       const devEmail = req.headers['x-dev-user-email'] as string | undefined;
       if (!devEmail) {
         res.status(401).json({ error: 'Unauthorized: dev mode requires x-dev-user-email header' });
@@ -199,7 +200,12 @@ export const register = async (req: Request, res: Response) => {
 
 export const unblock = async (req: Request, res: Response) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseId(req.params.id);
+    const [user] = await db.select().from(users).where(and(eq(users.id, userId), eq(users.organizationId, req.user!.organizationId))).limit(1);
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
     await unblockUser(userId);
     res.json({ message: 'User unblocked' });
   } catch (err) {
@@ -209,7 +215,12 @@ export const unblock = async (req: Request, res: Response) => {
 
 export const getEffectivePermissions = async (req: Request, res: Response) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseId(req.params.id);
+    const [user] = await db.select().from(users).where(and(eq(users.id, userId), eq(users.organizationId, req.user!.organizationId))).limit(1);
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
     const result = await resolveEffectivePermissions(userId);
     res.json(result);
   } catch (err) {
@@ -236,7 +247,25 @@ export const devLogin = async (req: Request, res: Response) => {
       return;
     }
 
-    res.json({ token: 'dev', user });
+    const token = `dev_${user.id}_${Date.now()}`;
+    const redis = await getRedisClient();
+    const userPayload = {
+      id: user.id,
+      firebaseUid: user.firebaseUid,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatarUrl: user.avatarUrl,
+      organizationId: user.organizationId,
+      departmentId: user.departmentId,
+      status: user.status || 'active',
+      role: user.role,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    };
+    await redis.setEx(`token:${token}`, REDIS_SESSION_TTL, JSON.stringify(userPayload));
+
+    res.json({ token, user });
   } catch (err) {
     logger.error('Dev login error', { error: err });
     res.status(500).json({ error: 'Dev login failed' });

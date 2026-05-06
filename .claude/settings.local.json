@@ -31,7 +31,13 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:4000/api/v1/health)",
       "Bash(curl *)",
       "Bash(mysqladmin ping *)",
-      "Bash(redis-cli ping *)"
+      "Bash(redis-cli ping *)",
+      "Bash(Get-ChildItem -Path C:\\\\workshop\\\\dev\\\\Freddy -Depth 2)",
+      "Bash(Select-Object -First 50)",
+      "Bash(Get-ChildItem -Path C:\\\\workshop\\\\dev\\\\Freddy -Recurse -File)",
+      "Bash(Sort-Object FullName)",
+      "Bash(xargs grep *)",
+      "Bash(node *)"
     ]
   }
 }

@@ -13,12 +13,16 @@ export const checkIsSuperAdmin = async (userId: number): Promise<boolean> => {
   return !!assignment;
 };
 
-export const listUsers = async (filters: { page?: number; limit?: number; search?: string; role?: string; status?: string; departmentId?: number; excludeSuperAdmin?: boolean }) => {
+export const checkUserIsSuperAdmin = async (userId: number): Promise<boolean> => {
+  return checkIsSuperAdmin(userId);
+};
+
+export const listUsers = async (filters: { organizationId: number; page?: number; limit?: number; search?: string; role?: string; status?: string; departmentId?: number; excludeSuperAdmin?: boolean }) => {
   const page = filters.page || 1;
   const limit = filters.limit || 20;
   const offset = (page - 1) * limit;
 
-  const conditions = [];
+  const conditions = [eq(users.organizationId, filters.organizationId)];
   if (filters.search) conditions.push(like(users.email, `%${filters.search}%`));
   if (filters.status) conditions.push(eq(users.status, filters.status as any));
   if (filters.departmentId) conditions.push(eq(users.departmentId, filters.departmentId));
@@ -44,8 +48,10 @@ export const listUsers = async (filters: { page?: number; limit?: number; search
   return { data, pagination: { page, limit, total: count, totalPages: Math.ceil(count / limit) } };
 };
 
-export const getUserById = async (id: number) => {
-  const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+export const getUserById = async (id: number, organizationId?: number) => {
+  const conditions = [eq(users.id, id)];
+  if (organizationId !== undefined) conditions.push(eq(users.organizationId, organizationId));
+  const [user] = await db.select().from(users).where(and(...conditions)).limit(1);
   if (!user) return null;
 
   const userRoleList = await db.select({ id: roles.id, name: roles.name, description: roles.description })
@@ -114,13 +120,31 @@ export const createUser = async (input: { email: string; firstName: string; last
   return getUserById(userId);
 };
 
-export const updateUser = async (id: number, input: { firstName?: string; lastName?: string; email?: string; phoneNumber?: string; departmentId?: number | null; status?: 'active' | 'inactive' | 'locked' | 'pending' | 'suspended' }) => {
-  await db.update(users).set(input as any).where(eq(users.id, id));
+export const updateUser = async (id: number, input: { firstName?: string; lastName?: string; email?: string; phoneNumber?: string; departmentId?: number | null; status?: 'active' | 'inactive' | 'locked' | 'pending' | 'suspended' }, organizationId?: number) => {
+  const conditions = [eq(users.id, id)];
+  if (organizationId !== undefined) conditions.push(eq(users.organizationId, organizationId));
+
+  if (input.status && input.status !== 'active') {
+    const isTargetSuperAdmin = await checkUserIsSuperAdmin(id);
+    if (isTargetSuperAdmin) {
+      throw new Error('Cannot change status of a Super Admin');
+    }
+  }
+
+  await db.update(users).set(input as any).where(and(...conditions));
   await invalidateUserPermissions(id);
   return getUserById(id);
 };
 
 export const updateUserRoles = async (id: number, roleIds: number[]) => {
+  const isTargetSuperAdmin = await checkUserIsSuperAdmin(id);
+  if (isTargetSuperAdmin) {
+    const [saRole] = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, 'Super Admin')).limit(1);
+    if (saRole && !roleIds.includes(saRole.id)) {
+      throw new Error('Cannot remove Super Admin role from a Super Admin');
+    }
+  }
+
   await db.delete(userRoles).where(eq(userRoles.userId, id));
   if (roleIds.length > 0) {
     await db.insert(userRoles).values(roleIds.map(rid => ({ userId: id, roleId: rid })));
@@ -140,8 +164,15 @@ export const resetUserPassword = async (id: number, newPassword: string) => {
   return { message: 'Password updated' };
 };
 
-export const deleteUser = async (id: number) => {
-  await db.update(users).set({ status: 'inactive' }).where(eq(users.id, id));
+export const deleteUser = async (id: number, organizationId?: number) => {
+  const isTargetSuperAdmin = await checkUserIsSuperAdmin(id);
+  if (isTargetSuperAdmin) {
+    throw new Error('Cannot deactivate a Super Admin');
+  }
+
+  const conditions = [eq(users.id, id)];
+  if (organizationId !== undefined) conditions.push(eq(users.organizationId, organizationId));
+  await db.update(users).set({ status: 'inactive' }).where(and(...conditions));
   await invalidateUserPermissions(id);
 };
 

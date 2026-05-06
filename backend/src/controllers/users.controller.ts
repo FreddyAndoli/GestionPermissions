@@ -1,20 +1,24 @@
 import { Request, Response } from 'express';
 import { listUsers, getUserById, createUser, updateUser, deleteUser, bulkCreateUsers, updateUserRoles, resetUserPassword, checkIsSuperAdmin } from '../services/users.service';
-import { createUserSchema, updateUserSchema, resetPasswordSchema } from '../schemas/user.schema';
+import { createUserSchema, updateUserSchema, resetPasswordSchema, bulkCreateUsersSchema } from '../schemas/user.schema';
 import { logger } from '../utils/logger';
 import { generateCSV, downloadCSV } from '../services/csv.service';
+import { parseId } from '../utils/asyncHandler';
 
 export const exportUsersCSV = async (req: Request, res: Response) => {
   try {
     const { search, role, status, departmentId } = req.query;
     const isSuperAdmin = await checkIsSuperAdmin(req.user!.id);
     const result = await listUsers({
+      organizationId: req.user!.organizationId,
       page: 1,
       limit: 10000,
       search: search as string,
       role: role as string,
       status: status as string,
-      departmentId: departmentId ? parseInt(departmentId as string) : undefined,
+      departmentId: isSuperAdmin
+        ? (departmentId ? parseInt(departmentId as string) : undefined)
+        : (req.user!.departmentId || undefined),
       excludeSuperAdmin: !isSuperAdmin
     });
     const csv = generateCSV(result.data, [
@@ -38,12 +42,15 @@ export const getUsers = async (req: Request, res: Response) => {
     const { page, limit, search, role, status, departmentId } = req.query;
     const isSuperAdmin = await checkIsSuperAdmin(req.user!.id);
     const result = await listUsers({
+      organizationId: req.user!.organizationId,
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
       search: search as string,
       role: role as string,
       status: status as string,
-      departmentId: departmentId ? parseInt(departmentId as string) : undefined,
+      departmentId: isSuperAdmin
+        ? (departmentId ? parseInt(departmentId as string) : undefined)
+        : (req.user!.departmentId || undefined),
       excludeSuperAdmin: !isSuperAdmin
     });
     res.json(result);
@@ -55,20 +62,25 @@ export const getUsers = async (req: Request, res: Response) => {
 
 export const getUser = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
-    const user = await getUserById(id);
+    const id = parseId(req.params.id);
+    const user = await getUserById(id, req.user!.organizationId);
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
+    const isViewerSuperAdmin = await checkIsSuperAdmin(req.user!.id);
+
+    // Non-super-admins can only view users in their own department
+    if (!isViewerSuperAdmin && req.user!.departmentId && user.departmentId !== req.user!.departmentId) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
     const isTargetSuperAdmin = user.roles?.some((r: any) => r.name === 'Super Admin');
-    if (isTargetSuperAdmin) {
-      const isViewerSuperAdmin = await checkIsSuperAdmin(req.user!.id);
-      if (!isViewerSuperAdmin) {
-        res.status(404).json({ error: 'User not found' });
-        return;
-      }
+    if (isTargetSuperAdmin && !isViewerSuperAdmin) {
+      res.status(404).json({ error: 'User not found' });
+      return;
     }
 
     res.json(user);
@@ -97,8 +109,8 @@ export const createNewUser = async (req: Request, res: Response) => {
 
 export const sendUserCredentials = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
-    const user = await getUserById(id);
+    const id = parseId(req.params.id);
+    const user = await getUserById(id, req.user!.organizationId);
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
@@ -112,13 +124,17 @@ export const sendUserCredentials = async (req: Request, res: Response) => {
 
 export const updateUserById = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseId(req.params.id);
     const data = updateUserSchema.parse(req.body);
-    const user = await updateUser(id, data);
+    const user = await updateUser(id, data, req.user!.organizationId);
     res.json(user);
   } catch (err: any) {
     if (err.name === 'ZodError') {
       res.status(400).json({ error: 'Validation failed', details: err.errors });
+      return;
+    }
+    if (err.message === 'Cannot change status of a Super Admin') {
+      res.status(403).json({ error: err.message });
       return;
     }
     res.status(500).json({ error: 'Failed to update user' });
@@ -127,24 +143,28 @@ export const updateUserById = async (req: Request, res: Response) => {
 
 export const deactivateUser = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
-    await deleteUser(id);
+    const id = parseId(req.params.id);
+    await deleteUser(id, req.user!.organizationId);
     res.json({ message: 'User deactivated' });
-  } catch (err) {
+  } catch (err: any) {
+    if (err.message === 'Cannot deactivate a Super Admin') {
+      res.status(403).json({ error: err.message });
+      return;
+    }
     res.status(500).json({ error: 'Failed to deactivate user' });
   }
 };
 
 export const bulkCreateUsersController = async (req: Request, res: Response) => {
   try {
-    const { users: userList } = req.body;
-    if (!Array.isArray(userList) || userList.length === 0) {
-      res.status(400).json({ error: 'users array is required' });
-      return;
-    }
+    const { users: userList } = bulkCreateUsersSchema.parse(req.body);
     const result = await bulkCreateUsers(userList, req.user!.organizationId);
     res.status(201).json(result);
   } catch (err: any) {
+    if (err.name === 'ZodError') {
+      res.status(400).json({ error: 'Validation failed', details: err.errors });
+      return;
+    }
     logger.error('Bulk create users error', { error: err });
     res.status(500).json({ error: 'Failed to bulk create users', message: err.message });
   }
@@ -152,7 +172,7 @@ export const bulkCreateUsersController = async (req: Request, res: Response) => 
 
 export const updateUserRolesController = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseId(req.params.id);
     const { roleIds } = req.body;
     if (!Array.isArray(roleIds)) {
       res.status(400).json({ error: 'roleIds array is required' });
@@ -161,6 +181,10 @@ export const updateUserRolesController = async (req: Request, res: Response) => 
     const user = await updateUserRoles(id, roleIds);
     res.json(user);
   } catch (err: any) {
+    if (err.message === 'Cannot remove Super Admin role from a Super Admin') {
+      res.status(403).json({ error: err.message });
+      return;
+    }
     logger.error('Update user roles error', { error: err });
     res.status(500).json({ error: 'Failed to update roles', message: err.message });
   }
@@ -168,7 +192,7 @@ export const updateUserRolesController = async (req: Request, res: Response) => 
 
 export const resetPasswordController = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseId(req.params.id);
     const data = resetPasswordSchema.parse(req.body);
     const result = await resetUserPassword(id, data.password);
     res.json(result);

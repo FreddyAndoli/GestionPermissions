@@ -28,7 +28,7 @@ export default function LoginPage() {
           headers: { 'x-dev-mode': 'true' }
         });
         localStorage.setItem('devUserEmail', data.user.email);
-        // Tell apiClient to use dev mode for subsequent requests
+        localStorage.setItem('devToken', data.token);
         router.push('/dashboard');
         return;
       }

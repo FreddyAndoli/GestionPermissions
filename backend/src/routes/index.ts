@@ -23,6 +23,7 @@ import publicHolidaysRoutes from './publicHolidays.routes';
 import blackoutRoutes from './blackout.routes';
 import preferencesRoutes from './preferences.routes';
 import userPermissionsRoutes from './userPermissions.routes';
+import organizationsRoutes from './organizations.routes';
 
 const router = Router();
 
@@ -49,5 +50,6 @@ router.use('/public-holidays', publicHolidaysRoutes);
 router.use('/blackout-periods', blackoutRoutes);
 router.use('/preferences', preferencesRoutes);
 router.use('/user-permissions', userPermissionsRoutes);
+router.use('/organizations', organizationsRoutes);
 
 export default router;
