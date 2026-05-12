@@ -28,9 +28,40 @@ interface Organization {
 export function useAuth() {
   const router = useRouter();
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const getStoredDevUser = (): User | null => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('devUser') : null;
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const [user, setUser] = useState<User | null>(getStoredDevUser);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const getToken = async () => {
+      if (firebaseUser) {
+        try {
+          const t = await firebaseUser.getIdToken();
+          setToken(t);
+        } catch {
+          setToken(null);
+        }
+      } else {
+        const devToken = typeof window !== 'undefined' ? localStorage.getItem('devToken') : null;
+        if (devToken) {
+          setToken(`dev:${localStorage.getItem('devUserEmail') || ''}`);
+        } else {
+          setToken(null);
+        }
+      }
+    };
+    getToken();
+  }, [firebaseUser]);
 
   const fetchOrganization = useCallback(async (orgId: number) => {
     try {
@@ -106,10 +137,11 @@ export function useAuth() {
     localStorage.removeItem('density');
     localStorage.removeItem('devUserEmail');
     localStorage.removeItem('devToken');
+    localStorage.removeItem('devUser');
     setUser(null);
     setOrganization(null);
     router.push('/login');
   }, [router]);
 
-  return { firebaseUser, user, organization, loading, isAuthenticated: !!user, logout };
+  return { firebaseUser, user, organization, loading, isAuthenticated: !!user, logout, token };
 }

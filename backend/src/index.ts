@@ -8,6 +8,7 @@ import { errorMiddleware } from './middlewares/error.middleware';
 import { getRedisClient } from './config/redis';
 import { connection } from './config/db';
 import { logger } from './utils/logger';
+import { initWebSocketServer } from './services/websocket.service';
 import './workers/notifications.worker';
 import './workers/cron.worker';
 
@@ -72,6 +73,8 @@ const startServer = async () => {
     const server = app.listen(PORT, () => {
       logger.info(`Backend server running on port ${PORT}`);
     });
+
+    initWebSocketServer(server);
 
     const gracefulShutdown = async (signal: string) => {
       logger.info(`Received ${signal}, shutting down gracefully`);

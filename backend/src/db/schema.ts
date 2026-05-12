@@ -465,3 +465,17 @@ export const messages = mysqlTable('messages', {
 }, (table) => ({
   convIdx: index('idx_messages_conversation').on(table.conversationId)
 }));
+
+export const consentLogs = mysqlTable('consent_logs', {
+  id: int('id').autoincrement().primaryKey(),
+  userId: int('user_id').notNull(),
+  purpose: varchar('purpose', { length: 100 }).notNull(),
+  lawfulBasis: mysqlEnum('lawful_basis', ['contract', 'legal_obligation', 'legitimate_interest', 'consent']).notNull(),
+  grantedAt: timestamp('granted_at').defaultNow(),
+  withdrawnAt: timestamp('withdrawn_at'),
+  ipAddress: varchar('ip_address', { length: 45 }),
+  createdAt: timestamp('created_at').defaultNow()
+}, (table) => ({
+  userIdx: index('idx_consent_user').on(table.userId),
+  purposeIdx: index('idx_consent_purpose').on(table.purpose)
+}));

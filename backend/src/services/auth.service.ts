@@ -6,6 +6,7 @@ import { resolveEffectivePermissions, invalidateUserPermissions } from './permis
 import { isAccountLocked, unlockAccount, trackLoginAttempt, lockAccount } from './redis.service';
 import { logger } from '../utils/logger';
 import { firebaseAuth } from '../config/firebase';
+import { recordDefaultConsents } from './consent.service';
 
 const LOGIN_ATTEMPTS_MAX = parseInt(process.env.REDIS_LOGIN_ATTEMPTS_MAX || '5');
 const LOCKOUT_DURATION = parseInt(process.env.REDIS_LOCKOUT_DURATION || '900');
@@ -25,6 +26,12 @@ export const syncFirebaseUser = async (firebaseUid: string, email: string, first
 
   const userId = newUser.insertId;
   await db.insert(userPreferences).values({ userId, theme: 'system', density: 'normal', language: 'fr' });
+
+  try {
+    await recordDefaultConsents(userId);
+  } catch (err) {
+    logger.error('Failed to record default consents', { error: err, userId });
+  }
 
   const [created] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   return created;

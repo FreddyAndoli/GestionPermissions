@@ -37,7 +37,12 @@
       "Bash(Get-ChildItem -Path C:\\\\workshop\\\\dev\\\\Freddy -Recurse -File)",
       "Bash(Sort-Object FullName)",
       "Bash(xargs grep *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(docker --version)",
+      "Bash(docker-compose --version)",
+      "Bash(Get-Content \"C:\\\\workshop\\\\dev\\\\Freddy\\\\frontend\\\\src\\\\app\\\\\\(app\\)\\\\announcements\\\\page.tsx\")",
+      "Bash(Select-Object -First 120)",
+      "Bash(del *)"
     ]
   }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { useDensity } from '@/hooks/useDensity';
@@ -11,7 +11,7 @@ import apiClient from '@/lib/apiClient';
 import { auth } from '@/lib/firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { QRCodeSVG } from 'qrcode.react';
-import { Save, Sun, Moon, Monitor, Smartphone, Mail, MessageCircle, User, Lock, Eye, EyeOff, Hash, Link, CheckCircle, ChevronDown, ChevronUp, Building2 } from 'lucide-react';
+import { Save, Sun, Moon, Monitor, Smartphone, Mail, MessageCircle, User, Lock, Eye, EyeOff, Hash, Link, CheckCircle, ChevronDown, ChevronUp, Building2, ShieldCheck, XCircle } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, organization, loading: authLoading, isAuthenticated } = useAuth();
@@ -45,6 +45,24 @@ export default function SettingsPage() {
   const [orgNameLoading, setOrgNameLoading] = useState(false);
   const [orgNameError, setOrgNameError] = useState('');
   const [orgNameSuccess, setOrgNameSuccess] = useState('');
+
+  const { data: consents = [] } = useQuery({
+    queryKey: ['consents', user?.id],
+    enabled: !!user && isAuthenticated,
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/users/${user?.id}/consents`);
+      return data || [];
+    }
+  });
+
+  const withdrawConsentMutation = useMutation({
+    mutationFn: async (purpose: string) => {
+      await apiClient.post(`/users/${user?.id}/consents/withdraw`, { purpose });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['consents', user?.id] });
+    }
+  });
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -518,25 +536,86 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* Securite */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border dark:border-slate-700 lg:col-span-2">
+        {/* Consentements GDPR */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border dark:border-slate-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <Lock size={18} /> Securite
+            <ShieldCheck size={18} /> Consentements
           </h2>
-          <button
-            onClick={() => {
-              setPwdModalOpen(true);
-              setPwdError('');
-              setPwdSuccess('');
-              setCurrentPwd('');
-              setNewPwd('');
-              setConfirmPwd('');
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
-          >
-            <Lock size={14} /> Changer le mot de passe
-          </button>
+          <div className="space-y-3">
+            {consents.length === 0 && <p className="text-sm text-gray-500 dark:text-slate-400">Aucun consentement enregistré.</p>}
+            {consents.map((c: any) => {
+              const isRequired = ['account_management', 'leave_processing'].includes(c.purpose);
+              const isActive = !c.withdrawnAt;
+              const purposeLabels: Record<string, string> = {
+                account_management: 'Gestion du compte',
+                leave_processing: 'Traitement des congés',
+                notifications: 'Notifications',
+                analytics: 'Analyses et améliorations'
+              };
+              const basisLabels: Record<string, string> = {
+                contract: 'Contrat',
+                legal_obligation: 'Obligation légale',
+                legitimate_interest: 'Intérêt légitime',
+                consent: 'Consentement'
+              };
+              return (
+                <div key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-slate-700/50">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{purposeLabels[c.purpose] || c.purpose}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                      Base légale : {basisLabels[c.lawfulBasis] || c.lawfulBasis}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isActive ? (
+                      <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                        <CheckCircle size={12} /> Actif
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
+                        <XCircle size={12} /> Retiré
+                      </span>
+                    )}
+                    {!isRequired && isActive && (
+                      <button
+                        onClick={() => withdrawConsentMutation.mutate(c.purpose)}
+                        disabled={withdrawConsentMutation.isPending}
+                        className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                      >
+                        Retirer
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-xs text-gray-500 dark:text-slate-400">
+            Les consentements marqués "Contrat" sont obligatoires pour le fonctionnement du service et ne peuvent pas être retirés.
+          </p>
         </div>
+
+        {/* Securite */}
+        {auth && (
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border dark:border-slate-700 lg:col-span-2">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Lock size={18} /> Securite
+            </h2>
+            <button
+              onClick={() => {
+                setPwdModalOpen(true);
+                setPwdError('');
+                setPwdSuccess('');
+                setCurrentPwd('');
+                setNewPwd('');
+                setConfirmPwd('');
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <Lock size={14} /> Changer le mot de passe
+            </button>
+          </div>
+        )}
       </div>
 
       {pwdModalOpen && (

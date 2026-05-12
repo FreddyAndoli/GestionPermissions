@@ -38,6 +38,7 @@ export default function UsersPage() {
   const canReadUsers = hasPermission('users.read');
   const canReadDepts = hasPermission('departments.read');
   const canReadRoles = hasPermission('roles.read');
+  const canCreateUsers = hasPermission('users.create');
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', page, search],
@@ -97,7 +98,13 @@ export default function UsersPage() {
       setSelectedRoleIds([]);
     },
     onError: (err: any) => {
-      setPwdError(err.message || 'Erreur lors de la creation');
+      const details = err.response?.data?.details;
+      const serverMsg = err.response?.data?.error;
+      if (details && Array.isArray(details)) {
+        setPwdError(details.map((d: any) => `${d.path?.join('.') || 'field'}: ${d.message}`).join('; '));
+      } else {
+        setPwdError(serverMsg || err.message || 'Erreur lors de la creation');
+      }
     }
   });
 
@@ -154,18 +161,22 @@ export default function UsersPage() {
           >
             <FileDown size={14} /> CSV
           </button>
-          <button
-            onClick={() => setBulkModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-700 border dark:border-slate-600 rounded-lg text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50"
-          >
-            <Upload size={14} /> Importer
-          </button>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
-          >
-            <Plus size={16} /> Ajouter
-          </button>
+          {canCreateUsers && (
+            <>
+              <button
+                onClick={() => setBulkModalOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-700 border dark:border-slate-600 rounded-lg text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50"
+              >
+                <Upload size={14} /> Importer
+              </button>
+              <button
+                onClick={() => setModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <Plus size={16} /> Ajouter
+              </button>
+            </>
+          )}
         </div>
       </div>
       {createdInfo && (
@@ -327,6 +338,12 @@ export default function UsersPage() {
               </button>
             </div>
           </div>
+          {password && password.length < 6 && (
+            <p className="text-sm text-amber-600">Le mot de passe doit contenir au moins 6 caracteres</p>
+          )}
+          {password && confirmPassword && password !== confirmPassword && (
+            <p className="text-sm text-amber-600">Les mots de passe ne correspondent pas</p>
+          )}
           {pwdError && <p className="text-sm text-red-600">{pwdError}</p>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -354,7 +371,7 @@ export default function UsersPage() {
                 className="w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none"
                 size={3}
               >
-                {roles.map((r: any) => (
+                {roles.filter((r: any) => r.name !== 'Super Admin').map((r: any) => (
                   <option key={r.id} value={r.id}>{r.name}</option>
                 ))}
               </select>
@@ -370,7 +387,7 @@ export default function UsersPage() {
             </button>
             <button
               onClick={() => createUser.mutate()}
-              disabled={createUser.isPending || !firstName || !lastName || !email || !password || !confirmPassword}
+              disabled={createUser.isPending || !firstName || !lastName || !email || !password || !confirmPassword || password.length < 6 || password !== confirmPassword}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
               {createUser.isPending ? 'Creation...' : 'Creer'}

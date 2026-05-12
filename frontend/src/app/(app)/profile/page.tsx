@@ -9,7 +9,7 @@ import apiClient from '@/lib/apiClient';
 import StatusBadge from '@/components/ui/StatusBadge';
 import {
   User, Mail, Building2, ShieldCheck, Briefcase, Calendar, Edit3, Save, X,
-  ArrowLeft, Camera, Hash
+  ArrowLeft, Camera, Hash, Download
 } from 'lucide-react';
 
 export default function ProfilePage() {
@@ -316,6 +316,25 @@ export default function ProfilePage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
             >
               <Calendar size={14} /> Mes conges
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const { data } = await apiClient.get(`/users/${user?.id}/export-data`);
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `mes-donnees-${user?.id}.json`;
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                } catch (err) {
+                  console.error('Export error', err);
+                }
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+            >
+              <Download size={14} /> Télécharger mes données
             </button>
           </div>
         </div>

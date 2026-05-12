@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { usePermissions } from '@/hooks/usePermissions';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import DensityToggle from '@/components/ui/DensityToggle';
 import NotificationBell from '@/components/ui/NotificationBell';
@@ -10,6 +11,7 @@ import Link from 'next/link';
 
 export default function Header() {
   const { user, logout } = useAuth();
+  const { isAdmin } = usePermissions();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -26,7 +28,7 @@ export default function Header() {
   return (
     <header className="h-16 bg-white dark:bg-slate-900 border-b dark:border-slate-700 flex items-center justify-between px-6 sticky top-0 z-30">
       <div className="text-sm text-gray-500 dark:text-slate-400">
-        Bonjour, {user?.firstName || 'Invite'}
+        Bonjour, {isAdmin() ? 'Admin' : (user?.firstName || 'Invite')}
       </div>
       <div className="flex items-center gap-3">
         <DensityToggle />

@@ -1,7 +1,16 @@
 import { db } from '../config/db';
-import { users, userPreferences, userRoles, roles, departments, leaveQuotas, leaveTypes, organizations } from '../db/schema';
+import { users, userPreferences, userRoles, roles, departments, leaveQuotas, leaveTypes, organizations, userPermissions, departmentMembers, subDepartmentMembers, leaveRequests, leaveComments, leaveStatusHistory, leaveCarryOverLogs, proxyRequests, notifications, loginAttempts, auditLogs, announcementDismissals, conversationParticipants, consentLogs, messages } from '../db/schema';
 import { eq, like, and, sql, inArray, notInArray } from 'drizzle-orm';
 import { invalidateUserPermissions } from './permissionsResolver.service';
+import { generateTempPassword, createSetPasswordToken } from './passwordToken.service';
+import { emailService } from './email.service';
+import { logger } from '../utils/logger';
+import { recordDefaultConsents } from './consent.service';
+
+const getSuperAdminRoleId = async (): Promise<number | null> => {
+  const [saRole] = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, 'Super Admin')).limit(1);
+  return saRole?.id ?? null;
+};
 
 export const checkIsSuperAdmin = async (userId: number): Promise<boolean> => {
   const [saRole] = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, 'Super Admin')).limit(1);
@@ -67,13 +76,22 @@ export const getUserById = async (id: number, organizationId?: number) => {
 };
 
 export const createUser = async (input: { email: string; firstName: string; lastName: string; phoneNumber?: string; password?: string; organizationId: number; departmentId?: number; roleIds?: number[] }) => {
+  const saRoleId = await getSuperAdminRoleId();
+  if (input.roleIds?.length && saRoleId !== null && input.roleIds.includes(saRoleId)) {
+    throw new Error('Super Admin role cannot be assigned through the API');
+  }
+
   const { firebaseAuth } = await import('../config/firebase');
 
+  // Admin-created users always get a system-generated temporary password.
+  // Admin-provided passwords are ignored so the admin never knows the password.
+  const tempPassword = generateTempPassword();
+
   let firebaseUid: string;
-  if (firebaseAuth && input.password) {
+  if (firebaseAuth) {
     const userRecord = await firebaseAuth.createUser({
       email: input.email,
-      password: input.password,
+      password: tempPassword,
       displayName: `${input.firstName} ${input.lastName}`
     });
     firebaseUid = userRecord.uid;
@@ -94,6 +112,12 @@ export const createUser = async (input: { email: string; firstName: string; last
 
   const userId = result.insertId;
   await db.insert(userPreferences).values({ userId, theme: 'system', density: 'normal', language: 'fr' } as any);
+
+  try {
+    await recordDefaultConsents(userId);
+  } catch (err) {
+    logger.error('Failed to record default consents', { error: err, userId });
+  }
 
   if (input.roleIds?.length) {
     await db.insert(userRoles).values(input.roleIds.map(rid => ({ userId, roleId: rid })));
@@ -117,6 +141,14 @@ export const createUser = async (input: { email: string; firstName: string; last
     }))
   );
 
+  // Send welcome email with temp password and set-password link (2h token)
+  try {
+    const token = await createSetPasswordToken(userId, input.email);
+    await emailService.sendWelcomeEmail(input.email, input.firstName, tempPassword, token);
+  } catch (err) {
+    logger.error('Failed to send welcome email', { error: err, userId, email: input.email });
+  }
+
   return getUserById(userId);
 };
 
@@ -138,9 +170,16 @@ export const updateUser = async (id: number, input: { firstName?: string; lastNa
 
 export const updateUserRoles = async (id: number, roleIds: number[]) => {
   const isTargetSuperAdmin = await checkUserIsSuperAdmin(id);
+  const saRoleId = await getSuperAdminRoleId();
+
+  if (saRoleId !== null && roleIds.includes(saRoleId)) {
+    if (!isTargetSuperAdmin) {
+      throw new Error('Super Admin role cannot be assigned through the API');
+    }
+  }
+
   if (isTargetSuperAdmin) {
-    const [saRole] = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, 'Super Admin')).limit(1);
-    if (saRole && !roleIds.includes(saRole.id)) {
+    if (saRoleId !== null && !roleIds.includes(saRoleId)) {
       throw new Error('Cannot remove Super Admin role from a Super Admin');
     }
   }
@@ -172,8 +211,20 @@ export const deleteUser = async (id: number, organizationId?: number) => {
 
   const conditions = [eq(users.id, id)];
   if (organizationId !== undefined) conditions.push(eq(users.organizationId, organizationId));
+
+  // Fetch user details before deactivation for the notification email
+  const [targetUser] = await db.select().from(users).where(and(...conditions)).limit(1);
+
   await db.update(users).set({ status: 'inactive' }).where(and(...conditions));
   await invalidateUserPermissions(id);
+
+  if (targetUser) {
+    try {
+      await emailService.sendAccountDeletedEmail(targetUser.email, targetUser.firstName);
+    } catch (err) {
+      logger.error('Failed to send account deleted email', { error: err, userId: id, email: targetUser.email });
+    }
+  }
 };
 
 export const bulkCreateUsers = async (
@@ -183,15 +234,21 @@ export const bulkCreateUsers = async (
   const { firebaseAuth } = await import('../config/firebase');
   const results = [] as any[];
   const errors = [] as any[];
+  const saRoleId = await getSuperAdminRoleId();
 
   for (const item of items) {
     try {
+      if (item.roleIds?.length && saRoleId !== null && item.roleIds.includes(saRoleId)) {
+        throw new Error('Super Admin role cannot be assigned through the API');
+      }
+
+      const tempPassword = generateTempPassword();
       let firebaseUid: string;
 
-      if (firebaseAuth && item.password) {
+      if (firebaseAuth) {
         const userRecord = await firebaseAuth.createUser({
           email: item.email,
-          password: item.password,
+          password: tempPassword,
           displayName: `${item.firstName} ${item.lastName}`
         });
         firebaseUid = userRecord.uid;
@@ -212,6 +269,12 @@ export const bulkCreateUsers = async (
 
       const userId = result.insertId;
       await db.insert(userPreferences).values({ userId, theme: 'system', density: 'normal', language: 'fr' } as any);
+
+      try {
+        await recordDefaultConsents(userId);
+      } catch (err) {
+        logger.error('Failed to record default consents (bulk)', { error: err, userId });
+      }
 
       if (item.roleIds?.length) {
         await db.insert(userRoles).values(item.roleIds.map(rid => ({ userId, roleId: rid })));
@@ -236,6 +299,13 @@ export const bulkCreateUsers = async (
         );
       }
 
+      try {
+        const token = await createSetPasswordToken(userId, item.email);
+        await emailService.sendWelcomeEmail(item.email, item.firstName, tempPassword, token);
+      } catch (err) {
+        logger.error('Failed to send welcome email (bulk)', { error: err, userId, email: item.email });
+      }
+
       results.push({ email: item.email, status: 'created', userId });
     } catch (err: any) {
       errors.push({ email: item.email, error: err.message });
@@ -243,4 +313,75 @@ export const bulkCreateUsers = async (
   }
 
   return { created: results.length, errors, results };
+};
+
+export const hardDeleteUser = async (id: number, organizationId?: number) => {
+  const conditions = [eq(users.id, id)];
+  if (organizationId !== undefined) conditions.push(eq(users.organizationId, organizationId));
+
+  const [targetUser] = await db.select().from(users).where(and(...conditions)).limit(1);
+  if (!targetUser) {
+    throw new Error('User not found');
+  }
+
+  // Delete from Firebase Auth first (best effort)
+  try {
+    const { firebaseAuth } = await import('../config/firebase');
+    if (firebaseAuth && targetUser.firebaseUid && !targetUser.firebaseUid.startsWith('dev_')) {
+      await firebaseAuth.deleteUser(targetUser.firebaseUid);
+    }
+  } catch (err: any) {
+    logger.error('Failed to delete Firebase user during hard delete', { userId: id, firebaseUid: targetUser.firebaseUid, error: err.message });
+    // Continue with DB cleanup even if Firebase delete fails
+  }
+
+  // Cascade delete all related records — resilient to missing tables
+  const safeDelete = async (label: string, fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+    } catch (err: any) {
+      if (err?.cause?.code === 'ER_NO_SUCH_TABLE') {
+        logger.warn(`Hard delete: table ${label} does not exist, skipping`, { userId: id });
+      } else {
+        logger.error(`Hard delete: failed to clean up ${label}`, { userId: id, error: err.message });
+      }
+    }
+  };
+
+  await safeDelete('userPreferences', () => db.delete(userPreferences).where(eq(userPreferences.userId, id)));
+  await safeDelete('userRoles', () => db.delete(userRoles).where(eq(userRoles.userId, id)));
+  await safeDelete('userPermissions', () => db.delete(userPermissions).where(eq(userPermissions.userId, id)));
+  await safeDelete('departmentMembers', () => db.delete(departmentMembers).where(eq(departmentMembers.userId, id)));
+  await safeDelete('subDepartmentMembers', () => db.delete(subDepartmentMembers).where(eq(subDepartmentMembers.userId, id)));
+  await safeDelete('leaveQuotas', () => db.delete(leaveQuotas).where(eq(leaveQuotas.userId, id)));
+  await safeDelete('leaveCarryOverLogs', () => db.delete(leaveCarryOverLogs).where(eq(leaveCarryOverLogs.userId, id)));
+  await safeDelete('proxyRequests', async () => {
+    await db.delete(proxyRequests).where(eq(proxyRequests.beneficiaryUserId, id));
+    await db.delete(proxyRequests).where(eq(proxyRequests.proxyUserId, id));
+  });
+  await safeDelete('notifications', () => db.delete(notifications).where(eq(notifications.userId, id)));
+  await safeDelete('loginAttempts', () => db.delete(loginAttempts).where(eq(loginAttempts.userId, id)));
+  await safeDelete('announcementDismissals', () => db.delete(announcementDismissals).where(eq(announcementDismissals.userId, id)));
+  await safeDelete('conversationParticipants', () => db.delete(conversationParticipants).where(eq(conversationParticipants.userId, id)));
+  await safeDelete('consentLogs', () => db.delete(consentLogs).where(eq(consentLogs.userId, id)));
+  await safeDelete('messages', () => db.delete(messages).where(eq(messages.senderId, id)));
+  await safeDelete('leaveComments', () => db.delete(leaveComments).where(eq(leaveComments.userId, id)));
+  await safeDelete('leaveStatusHistory', () => db.delete(leaveStatusHistory).where(eq(leaveStatusHistory.changedByUserId, id)));
+  await safeDelete('auditLogs', async () => {
+    await db.update(auditLogs).set({ actorId: null }).where(eq(auditLogs.actorId, id));
+    await db.update(auditLogs).set({ targetUserId: null }).where(eq(auditLogs.targetUserId, id));
+  });
+  await safeDelete('leaveRequests', async () => {
+    await db.update(leaveRequests).set({ managerId: null }).where(eq(leaveRequests.managerId, id));
+    await db.update(leaveRequests).set({ submittedByUserId: null }).where(eq(leaveRequests.submittedByUserId, id));
+    await db.update(leaveRequests).set({ replacementUserId: null }).where(eq(leaveRequests.replacementUserId, id));
+    await db.delete(leaveRequests).where(eq(leaveRequests.userId, id));
+  });
+
+  // Finally delete the user
+  await db.delete(users).where(and(...conditions));
+  await invalidateUserPermissions(id);
+
+  logger.info('User hard deleted', { userId: id, email: targetUser.email });
+  return { message: 'User deleted permanently' };
 };

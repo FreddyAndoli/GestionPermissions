@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { db } from '../config/db';
-import { users, invitations, roles, userRoles, leaveQuotas, leaveTypes, organizations } from '../db/schema';
+import { users, invitations, roles, userRoles, leaveQuotas, leaveTypes, organizations, userPreferences } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { firebaseAuth } from '../config/firebase';
 import { getRedisClient } from '../config/redis';
@@ -9,6 +9,8 @@ import { syncFirebaseUser, getCurrentUser, logoutUser, handleLoginAttempt, unblo
 import { logger } from '../utils/logger';
 import { resolveEffectivePermissions } from '../services/permissionsResolver.service';
 import { parseId } from '../utils/asyncHandler';
+import { validateSetPasswordToken, consumeSetPasswordToken, createOtp, validateOtp, consumeOtp } from '../services/passwordToken.service';
+import { emailService } from '../services/email.service';
 
 const REDIS_SESSION_TTL = parseInt(process.env.REDIS_SESSION_TTL || '3600');
 const IS_DEV = process.env.NODE_ENV === 'development';
@@ -195,6 +197,118 @@ export const register = async (req: Request, res: Response) => {
       return;
     }
     res.status(500).json({ error: 'Registration failed' });
+  }
+};
+
+export const setPassword = async (req: Request, res: Response) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword || newPassword.length < 6) {
+      res.status(400).json({ error: 'Token and password (min 6 chars) are required' });
+      return;
+    }
+
+    const payload = await validateSetPasswordToken(token);
+    if (!payload) {
+      res.status(400).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    const { firebaseAuth } = await import('../config/firebase');
+    if (firebaseAuth) {
+      const [dbUser] = await db.select().from(users).where(eq(users.id, payload.userId)).limit(1);
+      if (!dbUser) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+      await firebaseAuth.updateUser(dbUser.firebaseUid, { password: newPassword });
+    }
+
+    await consumeSetPasswordToken(token);
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    logger.error('Set password error', { error: err });
+    res.status(500).json({ error: 'Failed to set password' });
+  }
+};
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: 'Email is required' });
+      return;
+    }
+
+    const [dbUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+
+    // Always return same response to prevent email enumeration
+    if (!dbUser) {
+      res.json({ message: 'If this email exists, a reset code has been sent.' });
+      return;
+    }
+
+    const otp = await createOtp(`reset:${dbUser.id}`);
+
+    // Send via email
+    try {
+      await emailService.sendPasswordResetOtp(dbUser.email, dbUser.firstName, otp, 'email');
+    } catch (err) {
+      logger.error('Failed to send password reset email', { error: err, email: dbUser.email });
+    }
+
+    // Send via Telegram if linked
+    const [prefs] = await db.select().from(userPreferences).where(eq(userPreferences.userId, dbUser.id)).limit(1);
+    if (prefs?.telegramChatId) {
+      try {
+        const { sendViaProvider } = await import('../services/notification.service');
+        await sendViaProvider(dbUser.id, 'password.reset.otp', {
+          title: 'Code de réinitialisation de mot de passe',
+          message: `Votre code de réinitialisation est : ${otp}. Il est valable 2 heures.`,
+          telegramChatId: prefs.telegramChatId
+        });
+      } catch (err) {
+        logger.error('Failed to send password reset Telegram', { error: err, userId: dbUser.id });
+      }
+    }
+
+    res.json({ message: 'If this email exists, a reset code has been sent.' });
+  } catch (err) {
+    logger.error('Forgot password error', { error: err });
+    res.status(500).json({ error: 'Failed to process request' });
+  }
+};
+
+export const resetPasswordWithOtp = async (req: Request, res: Response) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword || newPassword.length < 6) {
+      res.status(400).json({ error: 'Email, OTP and password (min 6 chars) are required' });
+      return;
+    }
+
+    const [dbUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (!dbUser) {
+      res.status(400).json({ error: 'Invalid or expired code' });
+      return;
+    }
+
+    const valid = await validateOtp(`reset:${dbUser.id}`, otp);
+    if (!valid) {
+      res.status(400).json({ error: 'Invalid or expired code' });
+      return;
+    }
+
+    const { firebaseAuth } = await import('../config/firebase');
+    if (firebaseAuth) {
+      await firebaseAuth.updateUser(dbUser.firebaseUid, { password: newPassword });
+    }
+
+    await consumeOtp(`reset:${dbUser.id}`);
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    logger.error('Reset password error', { error: err });
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 };
 

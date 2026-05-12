@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -16,7 +16,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [devMode, setDevMode] = useState(false);
-  const hasFirebaseConfig = !!auth;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const hasFirebaseConfig = mounted ? !!auth : false;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +35,7 @@ export default function LoginPage() {
         });
         localStorage.setItem('devUserEmail', data.user.email);
         localStorage.setItem('devToken', data.token);
+        localStorage.setItem('devUser', JSON.stringify(data.user));
         router.push('/dashboard');
         return;
       }
@@ -117,8 +124,9 @@ export default function LoginPage() {
           {loading ? 'Connexion...' : 'Se connecter'}
         </button>
       </form>
-      <div className="mt-4 text-center">
-        <a href="/forgot-password" className="text-sm text-indigo-600 hover:underline">Mot de passe oublie ?</a>
+      <div className="mt-4 text-center space-y-2">
+        <a href="/forgot-password" className="text-sm text-indigo-600 hover:underline block">Mot de passe oublie ?</a>
+        <a href="/privacy-policy" className="text-sm text-gray-500 hover:underline block">Politique de confidentialite</a>
       </div>
     </motion.div>
   );
