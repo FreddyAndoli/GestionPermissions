@@ -15,7 +15,7 @@ import './workers/cron.worker';
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',') || [];
+const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',').filter(Boolean) || [];
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {

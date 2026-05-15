@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
   first_name VARCHAR(255) NOT NULL,
   last_name VARCHAR(255) NOT NULL,
   avatar_url VARCHAR(500),
+  phone_number VARCHAR(30),
   organization_id INT NOT NULL,
   department_id INT,
   sub_department_id INT,

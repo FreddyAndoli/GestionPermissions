@@ -48,7 +48,7 @@ export const listAuditLogs = async (filters: {
 
 export const logAction = async (input: {
   actorId?: number;
-  targetUserId?: number;
+  targetUserId?: number | null;
   action: string;
   entityType: string;
   entityId?: number;

@@ -31,11 +31,8 @@ export function useWebSocket() {
   const connect = useCallback(() => {
     if (!token || wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || (isSecure ? 'https://localhost:4000' : 'http://localhost:4000');
-    // Remove any path (e.g. /api/v1) so the WS path is exactly /ws
-    const baseOrigin = apiUrl.replace(/\/api\/.*$/, '').replace(/\/$/, '');
-    const wsUrl = baseOrigin.replace(/^http/, 'ws') + `/ws?token=${encodeURIComponent(token)}`;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
 
     const ws = new WebSocket(wsUrl);
 

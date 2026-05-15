@@ -25,8 +25,24 @@ vi.mock('../../middlewares/role.middleware', () => ({
   requirePermission: () => (_req: any, _res: any, next: any) => next()
 }));
 
+vi.mock('../../services/users.service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/users.service')>();
+  return {
+    ...actual,
+    listUsers: () => Promise.resolve({
+      data: [{ id: 1, email: 'admin@test.com', firstName: 'Admin', lastName: 'Test', status: 'active', role: 'Super Admin' }],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 }
+    }),
+    getUserById: (id: number) => {
+      if (id === 1) return Promise.resolve({ id: 1, email: 'admin@test.com', firstName: 'Admin', lastName: 'Test', status: 'active', role: 'Super Admin' });
+      return Promise.resolve(null);
+    }
+  };
+});
+
 const app = express();
 app.use(express.json());
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api/v1', routes);
 
 describe('Users API Integration', () => {

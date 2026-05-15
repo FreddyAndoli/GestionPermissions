@@ -8,7 +8,7 @@ describe('Auth', () => {
 
   it('should detect missing auth header', () => {
     const header = undefined as string | undefined;
-    expect(header?.startsWith('Bearer ')).toBe(false);
+    expect(!!header?.startsWith('Bearer ')).toBe(false);
   });
 });
 

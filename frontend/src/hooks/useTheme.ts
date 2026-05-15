@@ -6,13 +6,12 @@ import { useAuth } from './useAuth';
 
 export function useTheme() {
   const { isAuthenticated } = useAuth();
-  const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null;
-      return stored || 'system';
-    }
-    return 'system';
-  });
+  const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>('system');
+
+  useEffect(() => {
+    const stored = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null;
+    if (stored) setThemeState(stored);
+  }, []);
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
 
   const setTheme = useCallback((value: 'light' | 'dark' | 'system') => {

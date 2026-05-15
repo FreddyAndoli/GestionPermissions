@@ -22,7 +22,7 @@ export default function LoginPage() {
     setMounted(true);
   }, []);
 
-  const hasFirebaseConfig = mounted ? !!auth : false;
+  const hasFirebaseConfig = !!auth;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

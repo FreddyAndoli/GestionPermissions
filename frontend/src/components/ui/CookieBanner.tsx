@@ -65,12 +65,15 @@ export function useCookieConsent() {
 }
 
 export default function CookieBanner() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const { consent, showBanner, acceptAll, rejectNonEssential, customize } = useCookieConsent();
   const [showCustomize, setShowCustomize] = useState(false);
   const [analytics, setAnalytics] = useState(false);
   const [functional, setFunctional] = useState(true);
 
-  if (!showBanner) return null;
+  if (!mounted || !showBanner) return null;
 
   return (
     <AnimatePresence>
