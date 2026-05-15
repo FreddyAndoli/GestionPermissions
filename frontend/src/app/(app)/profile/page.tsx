@@ -7,9 +7,10 @@ import { useRouter } from 'next/navigation';
 import PageWrapper from '@/components/layout/PageWrapper';
 import apiClient from '@/lib/apiClient';
 import StatusBadge from '@/components/ui/StatusBadge';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 import {
   User, Mail, Building2, ShieldCheck, Briefcase, Calendar, Edit3, Save, X,
-  ArrowLeft, Camera, Hash, Download
+  ArrowLeft, Camera, Hash, Download, Info
 } from 'lucide-react';
 
 export default function ProfilePage() {
@@ -74,7 +75,10 @@ export default function ProfilePage() {
   if (authLoading || !user) {
     return (
       <PageWrapper>
-        <div className="p-6 text-sm text-gray-500">Chargement...</div>
+        <div className="max-w-4xl mx-auto space-y-6">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
       </PageWrapper>
     );
   }
@@ -84,6 +88,16 @@ export default function ProfilePage() {
   return (
     <PageWrapper>
       <div className="max-w-4xl mx-auto space-y-6">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+          <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <div className="text-sm text-blue-800 dark:text-blue-300">
+            <p className="font-semibold">Votre profil</p>
+            <p className="mt-1">
+              Consultez vos informations personnelles, votre departement, et vos roles. Cliquez sur "Modifier" pour mettre a jour votre photo de profil, votre numero de telephone ou vos coordonnees.
+            </p>
+          </div>
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <button

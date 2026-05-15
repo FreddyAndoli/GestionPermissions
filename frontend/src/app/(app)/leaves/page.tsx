@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileDown } from 'lucide-react';
+import { Plus, FileDown, Info } from 'lucide-react';
 import apiClient from '@/lib/apiClient';
 import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
 import DataTable from '@/components/ui/DataTable';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Modal from '@/components/ui/Modal';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 
 export default function LeavesPage() {
   const queryClient = useQueryClient();
@@ -72,6 +73,16 @@ export default function LeavesPage() {
 
   return (
     <PageWrapper>
+      <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+        <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800 dark:text-blue-300">
+          <p className="font-semibold">Comment demander un conge ?</p>
+          <p className="mt-1">
+            Choisissez les dates, le type de conge et un motif optionnel. Votre manager sera notifie et pourra approuver ou refuser la demande. Vous pouvez consulter votre solde restant sur le tableau de bord.
+          </p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Conges</h1>
         <div className="flex items-center gap-2">
@@ -104,7 +115,7 @@ export default function LeavesPage() {
         </div>
       </div>
       {isLoading ? (
-        <div className="text-sm text-gray-500">Chargement...</div>
+        <SkeletonTable rows={6} columns={5} />
       ) : (
         <DataTable columns={columns} data={data || []} />
       )}

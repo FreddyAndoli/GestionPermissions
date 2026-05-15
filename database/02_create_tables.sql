@@ -151,15 +151,6 @@ ALTER TABLE users
   ADD CONSTRAINT fk_users_department
   FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL;
 
--- Ensure sub_department_id column exists on existing users table
-ALTER TABLE users
-ADD COLUMN IF NOT EXISTS sub_department_id INT
-AFTER department_id;
-
--- Ensure index exists for FK performance
-ALTER TABLE users
-ADD INDEX idx_users_sub_department (sub_department_id);
-
 -- 11. department_members
 CREATE TABLE IF NOT EXISTS department_members (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -554,16 +545,23 @@ CREATE TABLE IF NOT EXISTS messages (
   INDEX idx_messages_conversation (conversation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 33. consent_logs (GDPR consent tracking)
+CREATE TABLE IF NOT EXISTS consent_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  purpose VARCHAR(100) NOT NULL,
+  lawful_basis ENUM('contract', 'legal_obligation', 'legitimate_interest', 'consent') NOT NULL,
+  granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  withdrawn_at TIMESTAMP NULL,
+  ip_address VARCHAR(45),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_consent_user (user_id),
+  INDEX idx_consent_purpose (purpose),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 -- Migrations de compatibilite (anciens fichiers 06 et 07 fusionnes)
 -- ============================================================
 
--- Ajout de la colonne is_paid sur leave_types si manquante
-ALTER TABLE leave_types
-ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT TRUE
-AFTER deductible_quota;
-
--- Ajout de la colonne phone_number sur users si manquante
-ALTER TABLE users
-ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30)
-AFTER avatar_url;
+-- NOTE: colonnes is_paid (leave_types) et phone_number (users) deja presentes dans CREATE TABLE

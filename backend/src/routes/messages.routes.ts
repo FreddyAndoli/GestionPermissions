@@ -5,6 +5,7 @@ import { conversations, conversationParticipants, messages, users } from '../db/
 import { eq, and, inArray } from 'drizzle-orm';
 import { Request, Response } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
+import { broadcastToConversation } from '../services/websocket.service';
 
 const router = Router();
 
@@ -107,6 +108,29 @@ router.post('/:id/messages', authMiddleware, asyncHandler(async (req: Request, r
     content
   });
   const [row] = await db.select().from(messages).where(eq(messages.id, result.insertId)).limit(1);
+
+  // Broadcast to all online participants
+  const participants = await db
+    .select({ userId: conversationParticipants.userId })
+    .from(conversationParticipants)
+    .where(eq(conversationParticipants.conversationId, id));
+  const participantIds = participants.map(p => p.userId);
+
+  const [sender] = await db
+    .select({ firstName: users.firstName, lastName: users.lastName })
+    .from(users)
+    .where(eq(users.id, req.user!.id))
+    .limit(1);
+
+  broadcastToConversation(participantIds, {
+    type: 'chat_message',
+    data: {
+      conversationId: id,
+      message: row,
+      sender: sender || { firstName: 'Utilisateur', lastName: '' }
+    }
+  });
+
   res.status(201).json(row);
 }));
 

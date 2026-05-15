@@ -12,10 +12,10 @@ import {
 
 const router = Router();
 
-router.get('/', authMiddleware, requirePermission('permissions.read'), asyncHandler(getProxyRequests));
-router.post('/', authMiddleware, requirePermission('permissions.create'), asyncHandler(postProxyRequest));
+router.get('/', authMiddleware, asyncHandler(getProxyRequests));
+router.post('/', authMiddleware, asyncHandler(postProxyRequest));
 router.put('/:id/confirm', authMiddleware, asyncHandler(confirmProxy));
-router.put('/:id/approve', authMiddleware, requirePermission('permissions.update'), asyncHandler(approveProxy));
-router.delete('/:id', authMiddleware, requirePermission('permissions.delete'), asyncHandler(removeProxyRequest));
+router.put('/:id/approve', authMiddleware, requirePermission('admin.read'), asyncHandler(approveProxy));
+router.delete('/:id', authMiddleware, asyncHandler(removeProxyRequest));
 
 export default router;

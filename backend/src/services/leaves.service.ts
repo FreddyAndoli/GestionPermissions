@@ -102,10 +102,18 @@ export const createLeaveRequest = async (input: {
     totalDays += days;
   }
 
-  // Check blackout periods
-  const bps = await db.select().from(blackoutPeriods);
+  // Resolve user for org/dept scoping and approvers
+  const [user] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+  if (!user) throw new Error('User not found');
+  const subDeptId = user?.subDepartmentId || null;
+  const deptId = user?.departmentId || null;
+
+  // Check blackout periods scoped to user's organization and department
+  const bps = await db.select().from(blackoutPeriods).where(eq(blackoutPeriods.organizationId, user.organizationId));
   for (const p of input.periods) {
     for (const bp of bps) {
+      // Skip department-specific blackouts that don't apply to this user's department
+      if (bp.departmentId !== null && bp.departmentId !== user.departmentId) continue;
       if (p.startDate <= bp.endDate.toISOString().split('T')[0] && p.endDate >= bp.startDate.toISOString().split('T')[0]) {
         throw new Error(`Blackout period: ${bp.message}`);
       }
@@ -127,10 +135,6 @@ export const createLeaveRequest = async (input: {
   }
 
   // Resolve sub_department and approvers
-  const [user] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
-  const subDeptId = user?.subDepartmentId || null;
-  const deptId = user?.departmentId || null;
-
   let managerId: number | null = null;
   let directorId: number | null = null;
 

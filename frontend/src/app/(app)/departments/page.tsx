@@ -8,6 +8,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
 import DataTable from '@/components/ui/DataTable';
 import Modal from '@/components/ui/Modal';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 
 interface DeptItem {
   id: number;
@@ -189,7 +190,7 @@ export default function DepartmentsPage() {
         </button>
       </div>
       {isLoading ? (
-        <div className="text-sm text-gray-500">Chargement...</div>
+        <SkeletonTable rows={6} columns={4} />
       ) : (
         <DataTable columns={columns} data={allRows} />
       )}

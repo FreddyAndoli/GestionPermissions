@@ -9,6 +9,7 @@ import { getRedisClient } from './config/redis';
 import { connection } from './config/db';
 import { logger } from './utils/logger';
 import { initWebSocketServer } from './services/websocket.service';
+import { seedDatabase } from './db/seed';
 import './workers/notifications.worker';
 import './workers/cron.worker';
 
@@ -34,6 +35,7 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
+    database: isDatabaseReady ? 'ready' : 'not_ready',
     uptime: process.uptime(),
     version: '1.0.0',
     timestamp: new Date().toISOString()
@@ -46,11 +48,27 @@ app.use('/api/v1', routes);
 // Global error handler
 app.use(errorMiddleware);
 
-const waitForDatabase = async (retries = 10, delayMs = 3000) => {
+let isDatabaseReady = false;
+
+const waitForDatabase = async (retries = 15, delayMs = 3000) => {
   for (let i = 0; i < retries; i++) {
     try {
+      // Verify TCP connectivity
       await connection.query('SELECT 1');
-      logger.info('Database connected');
+      // Verify critical tables exist by checking organizations
+      const [tableCheck] = await connection.query(
+        "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'organizations'"
+      ) as any[];
+      if (tableCheck[0]?.count === 0) {
+        logger.warn(`Database schema not ready, attempt ${i + 1}/${retries}`);
+        if (i < retries - 1) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          continue;
+        }
+        throw new Error('Organizations table does not exist after retries');
+      }
+      logger.info('Database connected and schema verified');
+      isDatabaseReady = true;
       return;
     } catch (err) {
       logger.warn(`Database not ready, attempt ${i + 1}/${retries}`, { error: (err as Error).message });
@@ -69,6 +87,7 @@ const startServer = async () => {
     logger.info('Redis connected');
 
     await waitForDatabase();
+    await seedDatabase();
 
     const server = app.listen(PORT, () => {
       logger.info(`Backend server running on port ${PORT}`);

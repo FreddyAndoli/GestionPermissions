@@ -8,10 +8,11 @@ import { useDensity } from '@/hooks/useDensity';
 import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
 import apiClient from '@/lib/apiClient';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 import { auth } from '@/lib/firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { QRCodeSVG } from 'qrcode.react';
-import { Save, Sun, Moon, Monitor, Smartphone, Mail, MessageCircle, User, Lock, Eye, EyeOff, Hash, Link, CheckCircle, ChevronDown, ChevronUp, Building2, ShieldCheck, XCircle } from 'lucide-react';
+import { Save, Sun, Moon, Monitor, Smartphone, Mail, MessageCircle, User, Lock, Eye, EyeOff, Hash, Link, CheckCircle, ChevronDown, ChevronUp, Building2, ShieldCheck, XCircle, Info } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, organization, loading: authLoading, isAuthenticated } = useAuth();
@@ -186,11 +187,32 @@ export default function SettingsPage() {
     }
   };
 
-  if (authLoading || !user) return <div className="p-6">Chargement...</div>;
+  if (authLoading || !user) {
+    return (
+      <PageWrapper>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Parametres</h1>
+
+      <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+        <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800 dark:text-blue-300">
+          <p className="font-semibold">Personnalisez votre experience</p>
+          <p className="mt-1">
+            Changez le theme (clair, sombre, ou systeme), la densite d'affichage, et vos preferences de notification. Vous pouvez aussi modifier votre mot de passe et configurer l'authentification a deux facteurs pour plus de securite.
+          </p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Profil */}

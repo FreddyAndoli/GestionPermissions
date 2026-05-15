@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { Plus, FileDown, Upload, Eye, EyeOff } from 'lucide-react';
+import { Plus, FileDown, Upload, Eye, EyeOff, AlertTriangle, Building2 } from 'lucide-react';
 import apiClient from '@/lib/apiClient';
 import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
@@ -11,6 +11,7 @@ import DataTable from '@/components/ui/DataTable';
 import StatusBadge from '@/components/ui/StatusBadge';
 import SearchBar from '@/components/ui/SearchBar';
 import Modal from '@/components/ui/Modal';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 
 export default function UsersPage() {
   const router = useRouter();
@@ -27,6 +28,7 @@ export default function UsersPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -34,6 +36,20 @@ export default function UsersPage() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
+
+  const validateEmail = (value: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!value) {
+      setEmailError('');
+      return false;
+    }
+    if (!emailRegex.test(value)) {
+      setEmailError('Adresse email invalide (ex: nom@entreprise.com)');
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
 
   const canReadUsers = hasPermission('users.read');
   const canReadDepts = hasPermission('departments.read');
@@ -193,11 +209,25 @@ export default function UsersPage() {
           </button>
         </div>
       )}
+      {departments.length === 0 && canCreateUsers && (
+        <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle size={20} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-sm text-amber-800 dark:text-amber-300">
+            <p className="font-semibold">Aucun departement cree</p>
+            <p className="mt-1">
+              Les employes doivent appartenir a un departement ou une equipe.{' '}
+              <a href="/departments" className="underline hover:text-amber-900">
+                Creez un departement d'abord
+              </a>
+            </p>
+          </div>
+        </div>
+      )}
       <div className="mb-4 max-w-sm">
         <SearchBar value={search} onChange={(v) => { setSearch(v); setPage(1); }} />
       </div>
       {isLoading ? (
-        <div className="text-sm text-gray-500">Chargement...</div>
+        <SkeletonTable rows={6} columns={4} />
       ) : (
         <DataTable
           columns={columns}
@@ -279,14 +309,24 @@ export default function UsersPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Email <span className="text-red-500">*</span></label>
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none"
+              onChange={(e) => {
+                setEmail(e.target.value);
+                validateEmail(e.target.value);
+              }}
+              onBlur={() => validateEmail(email)}
+              className={`w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none ${
+                emailError ? 'border-red-500 focus:ring-2 focus:ring-red-500' : 'dark:border-slate-600'
+              }`}
+              placeholder="ex: jean.dupont@entreprise.com"
               required
             />
+            {emailError && (
+              <p className="text-sm text-red-600 mt-1">{emailError}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Telephone</label>
@@ -386,8 +426,11 @@ export default function UsersPage() {
               Annuler
             </button>
             <button
-              onClick={() => createUser.mutate()}
-              disabled={createUser.isPending || !firstName || !lastName || !email || !password || !confirmPassword || password.length < 6 || password !== confirmPassword}
+              onClick={() => {
+                if (!validateEmail(email)) return;
+                createUser.mutate();
+              }}
+              disabled={createUser.isPending || !firstName || !lastName || !email || !password || !confirmPassword || password.length < 6 || password !== confirmPassword || !!emailError}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
               {createUser.isPending ? 'Creation...' : 'Creer'}

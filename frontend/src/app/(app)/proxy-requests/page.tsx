@@ -7,7 +7,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
 import DataTable from '@/components/ui/DataTable';
 import StatusBadge from '@/components/ui/StatusBadge';
-import { HandHelping, Check, X, Trash2 } from 'lucide-react';
+import { HandHelping, Check, X, Trash2, Info } from 'lucide-react';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 
 interface ProxyRequest {
   id: number;
@@ -30,7 +31,7 @@ export default function ProxyRequestsPage() {
   const canReadUsers = hasPermission('users.read');
   const canReadPermissions = hasPermission('permissions.read');
 
-  const { data: requests = [] } = useQuery({
+  const { data: requests = [], isLoading } = useQuery({
     queryKey: ['proxy-requests'],
     enabled: canReadProxy,
     queryFn: async () => {
@@ -154,6 +155,16 @@ export default function ProxyRequestsPage() {
         <HandHelping size={24} /> Demandes par procuration
       </h1>
 
+      <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+        <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800 dark:text-blue-300">
+          <p className="font-semibold">Comment fonctionne la procuration ?</p>
+          <p className="mt-1">
+            Un employe peut demander a agir au nom d'un collegue (beneficiaire) pour une permission specifique. Le beneficiaire doit d'abord confirmer, puis un administrateur approuve la demande. Utile pour les remplacements temporaires ou les absences prolongees.
+          </p>
+        </div>
+      </div>
+
       <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-sm border dark:border-slate-700 mb-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Nouvelle demande</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -203,11 +214,15 @@ export default function ProxyRequestsPage() {
         </button>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={requests}
-        pagination={undefined}
-      />
+      {isLoading ? (
+        <SkeletonTable rows={5} columns={6} />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={requests}
+          pagination={undefined}
+        />
+      )}
     </PageWrapper>
   );
 }

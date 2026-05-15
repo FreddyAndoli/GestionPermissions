@@ -7,6 +7,7 @@ import { Save, UserCog, Lock, ShieldCheck, Trash2, AlertTriangle } from 'lucide-
 import apiClient from '@/lib/apiClient';
 import PageWrapper from '@/components/layout/PageWrapper';
 import StatusBadge from '@/components/ui/StatusBadge';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import UserPermissionsPanel from './UserPermissionsPanel';
@@ -126,7 +127,16 @@ export default function UserDetailPage() {
     }
   });
 
-  if (isLoading || !user) return <div className="p-6">Chargement...</div>;
+  if (isLoading || !user) {
+    return (
+      <PageWrapper>
+        <div className="max-w-3xl mx-auto space-y-6">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      </PageWrapper>
+    );
+  }
 
   const canEdit = currentUser?.effectivePermissions?.['users.update'] || currentUser?.id === user.id;
   const isAdmin = currentUser?.effectivePermissions?.['users.update'];

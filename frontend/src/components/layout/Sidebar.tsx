@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Shield, KeyRound, Building2,
   CalendarDays, MessageSquare, ClipboardList,
   BarChart3, Settings, Monitor, Megaphone, UserCheck, HandHelping,
-  TreePine
+  TreePine, Calendar, AlertTriangle, Bell
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,12 +21,15 @@ const navItems = [
   { href: '/leaves', label: 'Conges', icon: CalendarDays, perm: 'leaves.read', tour: 'leaves' },
   { href: '/leave-types', label: 'Types de conges', icon: TreePine, perm: 'leave_types.read', tour: 'leave-types' },
   { href: '/team-calendar', label: 'Calendrier equipe', icon: CalendarDays, perm: 'leaves.read', tour: 'team-calendar' },
+  { href: '/public-holidays', label: 'Jours feries', icon: Calendar, perm: 'leaves.read', tour: 'public-holidays' },
+  { href: '/blackout-periods', label: 'Periodes bloquees', icon: AlertTriangle, perm: 'leaves.read', tour: 'blackout-periods' },
   { href: '/delegations', label: 'Delegations', icon: UserCheck, perm: 'leaves.approve', tour: 'delegations' },
-  { href: '/proxy-requests', label: 'Procuration', icon: HandHelping, perm: 'permissions.read', tour: 'proxy-requests' },
+  { href: '/proxy-requests', label: 'Procuration', icon: HandHelping, perm: null, tour: 'proxy-requests' },
   { href: '/messages', label: 'Messages', icon: MessageSquare, perm: 'messages.read', tour: 'messages' },
   { href: '/announcements', label: 'Annonces', icon: Megaphone, perm: null, tour: 'announcements' },
   { href: '/audit', label: 'Audit', icon: ClipboardList, perm: 'audit.read', tour: 'audit' },
   { href: '/reports', label: 'Rapports', icon: BarChart3, perm: 'reports.read', tour: 'reports' },
+  { href: '/notifications', label: 'Notifications', icon: Bell, perm: 'notifications.read', tour: 'notifications' },
   { href: '/simulator', label: 'Simulateur', icon: Monitor, perm: 'admin.simulate', tour: 'simulator' },
   { href: '/settings', label: 'Parametres', icon: Settings, perm: null, tour: 'settings' }
 ];

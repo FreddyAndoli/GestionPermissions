@@ -7,6 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
 import DataTable from '@/components/ui/DataTable';
 import SearchBar from '@/components/ui/SearchBar';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { FileDown, FileText } from 'lucide-react';
 
 export default function AuditPage() {
@@ -84,7 +85,7 @@ export default function AuditPage() {
         <SearchBar value={action} onChange={(v) => { setAction(v); setPage(1); }} placeholder="Filtrer par action..." />
       </div>
       {isLoading ? (
-        <div className="text-sm text-gray-500">Chargement...</div>
+        <SkeletonTable rows={6} columns={4} />
       ) : (
         <DataTable
           columns={columns}

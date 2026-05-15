@@ -1,5 +1,5 @@
 import { db } from '../config/db';
-import { users, userPreferences, userRoles, roles, leaveTypes, leaveQuotas } from '../db/schema';
+import { users, userPreferences, userRoles, roles, leaveTypes, leaveQuotas, organizations } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { getRedisClient } from '../config/redis';
 import { resolveEffectivePermissions, invalidateUserPermissions } from './permissionsResolver.service';
@@ -79,12 +79,10 @@ export const unblockUser = async (userId: number) => {
 };
 
 const getDefaultOrgId = async () => {
-  const rows = await db.select({ id: users.id }).from(users).limit(1);
-  if (rows.length > 0) {
-    const [u] = await db.select({ organizationId: users.organizationId }).from(users).where(eq(users.id, rows[0].id)).limit(1);
-    return u?.organizationId || 1;
-  }
-  return 1;
+  const [org] = await db.select({ id: organizations.id }).from(organizations).orderBy(organizations.id).limit(1);
+  if (org) return org.id;
+  logger.error('No default organization found');
+  throw new Error('No default organization found');
 };
 
 export const registerUser = async (input: { email: string; password: string; firstName: string; lastName: string }) => {

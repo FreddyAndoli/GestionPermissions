@@ -245,3 +245,16 @@ export const sendToUser = (userId: number, payload: any): boolean => {
   }
   return sent;
 };
+
+export const broadcastToConversation = (participantIds: number[], payload: any): number => {
+  const message = JSON.stringify(payload);
+  let count = 0;
+  for (const client of clients.values()) {
+    if (participantIds.includes(client.userId) && client.socket.readyState === WebSocket.OPEN) {
+      client.socket.send(message);
+      count++;
+    }
+  }
+  logger.info('Conversation broadcast', { recipients: count, participantCount: participantIds.length });
+  return count;
+};

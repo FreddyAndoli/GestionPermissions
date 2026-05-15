@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarDays, Info } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import PageWrapper from '@/components/layout/PageWrapper';
@@ -119,6 +119,16 @@ export default function TeamCalendarPage() {
 
   return (
     <PageWrapper>
+      <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+        <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800 dark:text-blue-300">
+          <p className="font-semibold">Que montre ce calendrier ?</p>
+          <p className="mt-1">
+            Visualisez les conges approuves de votre equipe mois par mois. Les jours feries apparaissent en rouge. Survolez un conge pour voir les dates detaillees et le nombre de jours.
+          </p>
+        </div>
+      </div>
+
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Calendrier equipe</h1>

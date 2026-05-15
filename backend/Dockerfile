@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # ---- Dependencies ----
-FROM node:20-alpine AS deps
+FROM node:20-slim AS deps
 WORKDIR /app
+RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 RUN npm install
 
@@ -22,7 +23,6 @@ COPY package*.json ./
 RUN npm install --omit=dev && npm cache clean --force
 
 COPY --from=builder --chown=app:nodejs /app/dist ./dist
-COPY --from=builder --chown=app:nodejs /app/src/db ./src/db
 
 USER app
 

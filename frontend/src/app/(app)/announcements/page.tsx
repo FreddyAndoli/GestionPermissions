@@ -7,6 +7,7 @@ import apiClient from '@/lib/apiClient';
 import PageWrapper from '@/components/layout/PageWrapper';
 import Modal from '@/components/ui/Modal';
 import { usePermissions } from '@/hooks/usePermissions';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const LEVEL_OPTIONS = [
@@ -87,7 +88,11 @@ export default function AnnouncementsPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-sm text-gray-500">Chargement...</div>
+        <div className="space-y-4">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
       ) : (
         <div className="space-y-4">
           <AnimatePresence>
