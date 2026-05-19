@@ -8,6 +8,7 @@ import { eq, and, gte, lte, sql, like } from 'drizzle-orm';
 const STORAGE_PATH = process.env.PDF_STORAGE_PATH || './storage/reports';
 
 export const generateLeaveReport = async (params: {
+  organizationId: number;
   period: 'month' | 'quarter' | 'year';
   scope: 'organization' | 'department';
   departmentId?: number;
@@ -33,24 +34,20 @@ export const generateLeaveReport = async (params: {
   // Fetch data
   const conditions = [
     gte(leaveRequests.createdAt, new Date(params.year, 0, 1)),
-    lte(leaveRequests.createdAt, new Date(params.year, 11, 31))
+    lte(leaveRequests.createdAt, new Date(params.year, 11, 31)),
+    eq(users.organizationId, params.organizationId)
   ];
 
   if (params.departmentId) {
-    const deptUsers = await db
-      .select({ userId: users.id })
-      .from(users)
-      .where(eq(users.departmentId, params.departmentId));
-    const userIds = deptUsers.map(u => u.userId);
-    if (userIds.length > 0) {
-      conditions.push(sql`${leaveRequests.userId} IN (${userIds.join(',')})`);
-    }
+    conditions.push(eq(users.departmentId, params.departmentId));
   }
 
   const rows = await db
     .select()
     .from(leaveRequests)
-    .where(and(...conditions));
+    .innerJoin(users, eq(users.id, leaveRequests.userId))
+    .where(and(...conditions))
+    .then((results) => results.map((r) => r.leave_requests));
 
   // Stats
   const approved = rows.filter(r => r.status === 'approved').length;
@@ -105,6 +102,7 @@ export const generateLeaveReport = async (params: {
 };
 
 export const generateAuditPDF = async (params: {
+  organizationId: number;
   actorId?: number;
   targetId?: number;
   action?: string;
@@ -127,7 +125,7 @@ export const generateAuditPDF = async (params: {
   page.drawText(`Genere le ${new Date().toLocaleDateString('fr-FR')}`, { x: 50, y, size: 10, font, color: rgb(0.5, 0.5, 0.5) });
   y -= 40;
 
-  const conditions = [];
+  const conditions = [eq(users.organizationId, params.organizationId)];
   if (params.actorId) conditions.push(eq(auditLogs.actorId, params.actorId));
   if (params.targetId) conditions.push(eq(auditLogs.targetUserId, params.targetId));
   if (params.action) conditions.push(like(auditLogs.action, `%${params.action}%`));
@@ -135,8 +133,14 @@ export const generateAuditPDF = async (params: {
   if (params.dateFrom) conditions.push(gte(auditLogs.createdAt, new Date(params.dateFrom)));
   if (params.dateTo) conditions.push(lte(auditLogs.createdAt, new Date(params.dateTo)));
 
-  const where = conditions.length > 0 ? and(...conditions) : undefined;
-  const rows = await db.select().from(auditLogs).where(where!).orderBy(auditLogs.createdAt);
+  const where = and(...conditions);
+  const rows = await db
+    .select()
+    .from(auditLogs)
+    .innerJoin(users, eq(users.id, auditLogs.actorId))
+    .where(where)
+    .orderBy(auditLogs.createdAt)
+    .then((results) => results.map((r) => r.audit_logs));
 
   page.drawText('Statistiques', { x: 50, y, size: 14, font: fontBold });
   y -= 20;
@@ -174,5 +178,11 @@ export const generateAuditPDF = async (params: {
 };
 
 export const getReportPath = (fileName: string) => {
-  return path.join(STORAGE_PATH, fileName);
+  const sanitized = path.basename(fileName);
+  const resolved = path.resolve(STORAGE_PATH, sanitized);
+  const storageRoot = path.resolve(STORAGE_PATH);
+  if (!resolved.startsWith(storageRoot)) {
+    throw new Error('Invalid report file name');
+  }
+  return resolved;
 };

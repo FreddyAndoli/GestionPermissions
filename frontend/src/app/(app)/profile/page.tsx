@@ -7,9 +7,10 @@ import { useRouter } from 'next/navigation';
 import PageWrapper from '@/components/layout/PageWrapper';
 import apiClient from '@/lib/apiClient';
 import StatusBadge from '@/components/ui/StatusBadge';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 import {
   User, Mail, Building2, ShieldCheck, Briefcase, Calendar, Edit3, Save, X,
-  ArrowLeft, Camera, Hash
+  ArrowLeft, Camera, Hash, Download, Info
 } from 'lucide-react';
 
 export default function ProfilePage() {
@@ -36,9 +37,10 @@ export default function ProfilePage() {
     queryKey: ['leave-stats', user?.id],
     queryFn: async () => {
       try {
-        const { data } = await apiClient.get(`/leaves?userId=${user?.id}&limit=1`);
+        const { data } = await apiClient.get('/leaves/me');
         return data;
-      } catch {
+      } catch (err: any) {
+        console.error('Leave stats error', err);
         return null;
       }
     },
@@ -73,7 +75,10 @@ export default function ProfilePage() {
   if (authLoading || !user) {
     return (
       <PageWrapper>
-        <div className="p-6 text-sm text-gray-500">Chargement...</div>
+        <div className="max-w-4xl mx-auto space-y-6">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
       </PageWrapper>
     );
   }
@@ -83,6 +88,16 @@ export default function ProfilePage() {
   return (
     <PageWrapper>
       <div className="max-w-4xl mx-auto space-y-6">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+          <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <div className="text-sm text-blue-800 dark:text-blue-300">
+            <p className="font-semibold">Votre profil</p>
+            <p className="mt-1">
+              Consultez vos informations personnelles, votre departement, et vos roles. Cliquez sur "Modifier" pour mettre a jour votre photo de profil, votre numero de telephone ou vos coordonnees.
+            </p>
+          </div>
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <button
@@ -115,7 +130,7 @@ export default function ProfilePage() {
             <div className="relative -mt-16 mb-4">
               <div className="w-32 h-32 rounded-xl border-4 border-white dark:border-slate-800 bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-3xl font-bold text-indigo-600 dark:text-indigo-400 overflow-hidden shadow-lg">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt={initials} className="w-full h-full object-cover" />
+                  <img src={avatarUrl} alt={initials} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   initials
                 )}
@@ -315,6 +330,25 @@ export default function ProfilePage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
             >
               <Calendar size={14} /> Mes conges
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const { data } = await apiClient.get(`/users/${user?.id}/export-data`);
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `mes-donnees-${user?.id}.json`;
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                } catch (err) {
+                  console.error('Export error', err);
+                }
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+            >
+              <Download size={14} /> Télécharger mes données
             </button>
           </div>
         </div>

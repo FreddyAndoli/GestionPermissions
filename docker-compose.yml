@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mysql:
     image: mysql:8.0
@@ -11,7 +9,7 @@ services:
       MYSQL_USER: pm_user
       MYSQL_PASSWORD: ${DB_PASSWORD:-password}
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./database:/docker-entrypoint-initdb.d:ro
@@ -19,7 +17,8 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      start_period: 120s
+      retries: 10
     networks:
       - pm_network
 
@@ -29,6 +28,11 @@ services:
     restart: unless-stopped
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - pm_network
 
@@ -36,35 +40,43 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: deps
     container_name: pm_backend
+    command: npm run dev
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "8080:4000"
+    env_file:
+      - ./backend/.env
     environment:
+      # Docker-specific overrides. All other vars come from env_file (backend/.env).
       - NODE_ENV=development
       - PORT=4000
       - DATABASE_URL=mysql://pm_user:${DB_PASSWORD:-password}@mysql:3306/permission_manager
       - REDIS_URL=redis://redis:6379
-      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
-      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL}
-      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY}
+      - REDIS_PERMISSIONS_TTL=${REDIS_PERMISSIONS_TTL:-900}
+      - REDIS_RATE_LIMIT_WINDOW=${REDIS_RATE_LIMIT_WINDOW:-60}
+      - REDIS_RATE_LIMIT_MAX=${REDIS_RATE_LIMIT_MAX:-100}
+      - REDIS_SESSION_TTL=${REDIS_SESSION_TTL:-3600}
+      - REDIS_LOGIN_ATTEMPTS_MAX=${REDIS_LOGIN_ATTEMPTS_MAX:-5}
+      - REDIS_LOCKOUT_DURATION=${REDIS_LOCKOUT_DURATION:-900}
       - NOTIFICATION_PROVIDER=${NOTIFICATION_PROVIDER:-telegram}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
-      - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID}
-      - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
-      - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
-      - GMAIL_SENDER_EMAIL=${GMAIL_SENDER_EMAIL}
-      - FCM_SERVER_KEY=${FCM_SERVER_KEY}
-      - LOG_LEVEL=info
+      - PDF_STORAGE_PATH=${PDF_STORAGE_PATH:-./storage/reports}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_DIR=${LOG_DIR:-./logs}
     volumes:
       - ./backend:/app
       - /app/node_modules
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     depends_on:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     networks:
       - pm_network
 
@@ -72,27 +84,34 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: deps
     container_name: pm_frontend
+    # Next.js dev server must bind to 0.0.0.0 to be reachable from nginx.
+    # Port 3000 is guaranteed free inside the container, so we bypass start.mjs.
+    command: sh -c "npx next dev -p 3000 -H 0.0.0.0"
     restart: unless-stopped
     ports:
       - "3000:3000"
+    env_file:
+      - ./frontend/.env
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
-      - NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}
-      - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}
-      - NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}
-      - NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}
-      - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}
-      - NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}
-      - NEXT_PUBLIC_FIREBASE_VAPID_KEY=${NEXT_PUBLIC_FIREBASE_VAPID_KEY}
+      # Docker-specific overrides. All other vars come from env_file (frontend/.env).
+      - NEXT_PUBLIC_API_URL=/api/v1
+      - NEXT_PUBLIC_APP_URL=http://localhost
       - NEXT_PUBLIC_APP_NAME=Permission Manager
-      - NEXT_PUBLIC_APP_URL=http://localhost:3000
     volumes:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # Next.js App Router has no root page (404 on /). Check /login which returns 200.
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/login"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     networks:
       - pm_network
 
@@ -104,10 +123,16 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      - "443:443"
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     networks:
       - pm_network
 

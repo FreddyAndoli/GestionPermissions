@@ -1,23 +1,26 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, UserCog, Lock, ShieldCheck } from 'lucide-react';
+import { Save, UserCog, Lock, ShieldCheck, Trash2, AlertTriangle } from 'lucide-react';
 import apiClient from '@/lib/apiClient';
 import PageWrapper from '@/components/layout/PageWrapper';
 import StatusBadge from '@/components/ui/StatusBadge';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import UserPermissionsPanel from './UserPermissionsPanel';
 
 export default function UserDetailPage() {
+  const router = useRouter();
   const { id } = useParams();
   const { user: currentUser } = useAuth();
   const { hasPermission } = usePermissions();
   const queryClient = useQueryClient();
   const [editMode, setEditMode] = useState(false);
   const [showResetPwd, setShowResetPwd] = useState(false);
+  const [showHardDelete, setShowHardDelete] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [pwdError, setPwdError] = useState('');
@@ -52,6 +55,17 @@ export default function UserDetailPage() {
       return data || [];
     }
   });
+
+  const groupTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      department: 'Departement',
+      team: 'Equipe',
+      unit: 'Unite',
+      group: 'Groupe',
+      branch: 'Succursale'
+    };
+    return labels[type] || type;
+  };
 
   const { data: allRoles = [] } = useQuery({
     queryKey: ['roles-list-user'],
@@ -111,7 +125,29 @@ export default function UserDetailPage() {
     }
   });
 
-  if (isLoading || !user) return <div className="p-6">Chargement...</div>;
+  const hardDelete = useMutation({
+    mutationFn: async () => {
+      await apiClient.delete(`/users/${id}/hard`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      router.push('/users');
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.error || 'Erreur lors de la suppression');
+    }
+  });
+
+  if (isLoading || !user) {
+    return (
+      <PageWrapper>
+        <div className="max-w-3xl mx-auto space-y-6">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      </PageWrapper>
+    );
+  }
 
   const canEdit = currentUser?.effectivePermissions?.['users.update'] || currentUser?.id === user.id;
   const isAdmin = currentUser?.effectivePermissions?.['users.update'];
@@ -193,20 +229,20 @@ export default function UserDetailPage() {
                 >
                   <option value="active">Actif</option>
                   <option value="inactive">Inactif</option>
-                  <option value="suspended">Suspendu</option>
-                  <option value="pending">En attente</option>
+                  <option value="locked">Verrouille</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Departement</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Groupe / Departement / Equipe</label>
                 <select
                   value={departmentId}
                   onChange={(e) => setDepartmentId(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none"
+                  required
                 >
-                  <option value="">Aucun</option>
+                  <option value="">Choisir...</option>
                   {departments.map((d: any) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
+                    <option key={d.id} value={d.id}>[{groupTypeLabel(d.type || 'department')}] {d.name}</option>
                   ))}
                 </select>
               </div>
@@ -266,7 +302,7 @@ export default function UserDetailPage() {
               </button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {allRoles.map((role: any) => {
+              {allRoles.filter((role: any) => role.name !== 'Super Admin').map((role: any) => {
                 const checked = selectedRoleIds.includes(role.id);
                 return (
                   <label
@@ -342,6 +378,46 @@ export default function UserDetailPage() {
               >
                 <Lock size={14} /> Reinitialiser le mot de passe
               </button>
+            )}
+
+            {!isOwnProfile && (
+              <div className="mt-4 pt-4 border-t dark:border-slate-600">
+                {!showHardDelete ? (
+                  <button
+                    onClick={() => setShowHardDelete(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg text-sm font-medium hover:bg-red-200 dark:hover:bg-red-900/30 transition-colors"
+                  >
+                    <Trash2 size={14} /> Supprimer definitivement
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
+                      <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium">Cette action est irreversible.</p>
+                        <p className="text-xs opacity-80 mt-1">
+                          L utilisateur, ses donnees personnelles et son compte Firebase seront supprimes definitivement.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => hardDelete.mutate()}
+                        disabled={hardDelete.isPending}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        {hardDelete.isPending ? 'Suppression...' : 'Confirmer la suppression'}
+                      </button>
+                      <button
+                        onClick={() => setShowHardDelete(false)}
+                        className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-slate-600"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </>

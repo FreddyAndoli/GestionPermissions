@@ -6,6 +6,7 @@ export const exportAuditCSV = async (req: Request, res: Response) => {
   try {
     const { actorId, targetId, action, entityType, dateFrom, dateTo } = req.query;
     const result = await listAuditLogs({
+      organizationId: req.user!.organizationId,
       actorId: actorId ? parseInt(actorId as string) : undefined,
       targetId: targetId ? parseInt(targetId as string) : undefined,
       action: action as string,
@@ -35,6 +36,7 @@ export const getAuditLogs = async (req: Request, res: Response) => {
   try {
     const { actorId, targetId, action, entityType, dateFrom, dateTo, page, limit } = req.query;
     const result = await listAuditLogs({
+      organizationId: req.user!.organizationId,
       actorId: actorId ? parseInt(actorId as string) : undefined,
       targetId: targetId ? parseInt(targetId as string) : undefined,
       action: action as string,

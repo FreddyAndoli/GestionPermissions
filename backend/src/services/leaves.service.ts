@@ -7,14 +7,17 @@ import {
 } from '../db/schema';
 import { eq, and, gte, lte, sql, inArray } from 'drizzle-orm';
 
+type TxClient = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 const insertLeaveStatusHistory = async (data: {
   leaveRequestId: number;
   oldStatus?: string;
   newStatus: string;
   changedByUserId: number;
   comment?: string;
-}) => {
-  await db.insert(leaveStatusHistory).values(data);
+}, tx?: TxClient) => {
+  const client = tx || db;
+  await client.insert(leaveStatusHistory).values(data);
 };
 
 export const getLeaveComments = async (leaveRequestId: number) => {
@@ -25,16 +28,23 @@ export const getLeaveHistory = async (leaveRequestId: number) => {
   return db.select().from(leaveStatusHistory).where(eq(leaveStatusHistory.leaveRequestId, leaveRequestId));
 };
 
-export const listLeaveRequests = async (filters: { userId?: number; status?: string; type?: number; dateFrom?: string; dateTo?: string }) => {
-  const conditions = [];
+export const listLeaveRequests = async (filters: { organizationId: number; userId?: number; status?: string; type?: number; dateFrom?: string; dateTo?: string }) => {
+  const conditions = [
+    eq(users.organizationId, filters.organizationId)
+  ];
   if (filters.userId) conditions.push(eq(leaveRequests.userId, filters.userId));
   if (filters.status) conditions.push(eq(leaveRequests.status, filters.status as any));
   if (filters.type) conditions.push(eq(leaveRequests.leaveTypeId, filters.type));
   if (filters.dateFrom) conditions.push(gte(leaveRequests.createdAt, new Date(filters.dateFrom)));
   if (filters.dateTo) conditions.push(lte(leaveRequests.createdAt, new Date(filters.dateTo)));
 
-  const where = conditions.length > 0 ? and(...conditions) : undefined;
-  const rows = await db.select().from(leaveRequests).where(where!);
+  const where = and(...conditions);
+  const rows = await db
+    .select()
+    .from(leaveRequests)
+    .innerJoin(users, eq(users.id, leaveRequests.userId))
+    .where(where)
+    .then((results) => results.map((r) => r.leave_requests));
 
   const result = [];
   for (const r of rows) {
@@ -45,8 +55,18 @@ export const listLeaveRequests = async (filters: { userId?: number; status?: str
   return result;
 };
 
-export const getLeaveRequest = async (id: number) => {
-  const [row] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id)).limit(1);
+export const getLeaveRequest = async (id: number, organizationId?: number) => {
+  const conditions = [eq(leaveRequests.id, id)];
+  if (organizationId !== undefined) {
+    conditions.push(eq(users.organizationId, organizationId));
+  }
+  const results = await db
+    .select()
+    .from(leaveRequests)
+    .innerJoin(users, eq(users.id, leaveRequests.userId))
+    .where(and(...conditions))
+    .limit(1);
+  const row = results[0]?.leave_requests;
   if (!row) return null;
   const periods = await db.select().from(leavePeriods).where(eq(leavePeriods.leaveRequestId, id));
   const attachments = await db.select().from(leaveAttachments).where(eq(leaveAttachments.leaveRequestId, id));
@@ -68,7 +88,7 @@ export const createLeaveRequest = async (input: {
   // Calculate total days
   let totalDays = 0;
   const holidays = await db.select().from(publicHolidays);
-  const holidaySet = new Set(holidays.map(h => h.holidayDate.toISOString().split('T')[0]));
+  const holidaySet = new Set(holidays.map(h => h.holidayDate as unknown as string));
 
   for (const p of input.periods) {
     const start = new Date(p.startDate);
@@ -82,11 +102,19 @@ export const createLeaveRequest = async (input: {
     totalDays += days;
   }
 
-  // Check blackout periods
-  const bps = await db.select().from(blackoutPeriods);
+  // Resolve user for org/dept scoping and approvers
+  const [user] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+  if (!user) throw new Error('User not found');
+  const subDeptId = user?.subDepartmentId || null;
+  const deptId = user?.departmentId || null;
+
+  // Check blackout periods scoped to user's organization and department
+  const bps = await db.select().from(blackoutPeriods).where(eq(blackoutPeriods.organizationId, user.organizationId));
   for (const p of input.periods) {
     for (const bp of bps) {
-      if (p.startDate <= bp.endDate.toISOString().split('T')[0] && p.endDate >= bp.startDate.toISOString().split('T')[0]) {
+      // Skip department-specific blackouts that don't apply to this user's department
+      if (bp.departmentId !== null && bp.departmentId !== user.departmentId) continue;
+      if (p.startDate <= (bp.endDate as unknown as string) && p.endDate >= (bp.startDate as unknown as string)) {
         throw new Error(`Blackout period: ${bp.message}`);
       }
     }
@@ -107,10 +135,6 @@ export const createLeaveRequest = async (input: {
   }
 
   // Resolve sub_department and approvers
-  const [user] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
-  const subDeptId = user?.subDepartmentId || null;
-  const deptId = user?.departmentId || null;
-
   let managerId: number | null = null;
   let directorId: number | null = null;
 
@@ -140,64 +164,76 @@ export const createLeaveRequest = async (input: {
     directorStatus = 'approved';
   }
 
-  const [result] = await db.insert(leaveRequests).values({
-    userId: input.userId,
-    leaveTypeId: input.leaveTypeId,
-    subDepartmentId: subDeptId,
-    managerId,
-    directorId,
-    status: initialStatus,
-    managerStatus,
-    directorStatus,
-    totalDays,
-    reason: input.reason,
-    replacementUserId: input.replacementUserId,
-    isProxyRequest: input.isProxyRequest || false,
-    submittedByUserId: input.submittedByUserId
-  });
-
-  const requestId = result.insertId;
-  for (const p of input.periods) {
-    await db.insert(leavePeriods).values({
-      leaveRequestId: requestId,
-      startDate: new Date(p.startDate),
-      endDate: new Date(p.endDate),
-      daysCount: totalDays
+  return db.transaction(async (tx) => {
+    const [result] = await tx.insert(leaveRequests).values({
+      userId: input.userId,
+      leaveTypeId: input.leaveTypeId,
+      subDepartmentId: subDeptId,
+      managerId,
+      directorId,
+      status: initialStatus,
+      managerStatus,
+      directorStatus,
+      totalDays,
+      reason: input.reason,
+      replacementUserId: input.replacementUserId,
+      isProxyRequest: input.isProxyRequest || false,
+      submittedByUserId: input.submittedByUserId
     });
-  }
 
-  if (quota) {
-    await db.update(leaveQuotas)
-      .set({ pendingDays: (quota.pendingDays || 0) + totalDays })
-      .where(eq(leaveQuotas.id, quota.id));
-  }
+    const requestId = result.insertId;
+    for (const p of input.periods) {
+      await tx.insert(leavePeriods).values({
+        leaveRequestId: requestId,
+        startDate: new Date(p.startDate),
+        endDate: new Date(p.endDate),
+        daysCount: totalDays
+      });
+    }
 
-  if (type?.validationMode === 'auto_approved') {
-    await insertLeaveStatusHistory({
-      leaveRequestId: requestId,
-      newStatus: 'auto_approved',
-      changedByUserId: input.userId,
-      comment: 'Auto approved'
-    });
     if (quota) {
-      await db.update(leaveQuotas)
-        .set({ usedDays: (quota.usedDays || 0) + totalDays, pendingDays: Math.max(0, (quota.pendingDays || 0) - totalDays) })
+      await tx.update(leaveQuotas)
+        .set({ pendingDays: (quota.pendingDays || 0) + totalDays })
         .where(eq(leaveQuotas.id, quota.id));
     }
-  } else {
-    await insertLeaveStatusHistory({
-      leaveRequestId: requestId,
-      newStatus: 'pending',
-      changedByUserId: input.userId,
-      comment: 'Submitted'
-    });
-  }
 
-  return getLeaveRequest(requestId);
+    if (type?.validationMode === 'auto_approved') {
+      await insertLeaveStatusHistory({
+        leaveRequestId: requestId,
+        newStatus: 'auto_approved',
+        changedByUserId: input.userId,
+        comment: 'Auto approved'
+      }, tx);
+      if (quota) {
+        await tx.update(leaveQuotas)
+          .set({ usedDays: (quota.usedDays || 0) + totalDays, pendingDays: Math.max(0, (quota.pendingDays || 0) - totalDays) })
+          .where(eq(leaveQuotas.id, quota.id));
+      }
+    } else {
+      await insertLeaveStatusHistory({
+        leaveRequestId: requestId,
+        newStatus: 'pending',
+        changedByUserId: input.userId,
+        comment: 'Submitted'
+      }, tx);
+    }
+
+    return getLeaveRequest(requestId);
+  });
 };
 
-export const approveLeave = async (id: number, approverId: number, comment?: string, isDelegated = false) => {
-  const [req] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id)).limit(1);
+export const approveLeave = async (id: number, approverId: number, comment?: string, isDelegated = false, organizationId?: number) => {
+  let conditions: any[] = [eq(leaveRequests.id, id)];
+  if (organizationId !== undefined) {
+    conditions.push(eq(users.organizationId, organizationId));
+  }
+  const [req] = await db
+    .select()
+    .from(leaveRequests)
+    .innerJoin(users, eq(users.id, leaveRequests.userId))
+    .where(and(...conditions))
+    .limit(1)
+    .then((results) => results.map((r) => r.leave_requests));
   if (!req) throw new Error('Leave request not found');
   if (req.status !== 'pending') throw new Error('Request is not pending manager review');
 
@@ -307,8 +343,18 @@ export const approveLeave = async (id: number, approverId: number, comment?: str
   return getLeaveRequest(id);
 };
 
-export const rejectLeave = async (id: number, approverId: number, comment?: string, isDelegated = false) => {
-  const [req] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id)).limit(1);
+export const rejectLeave = async (id: number, approverId: number, comment?: string, isDelegated = false, organizationId?: number) => {
+  let conditions: any[] = [eq(leaveRequests.id, id)];
+  if (organizationId !== undefined) {
+    conditions.push(eq(users.organizationId, organizationId));
+  }
+  const [req] = await db
+    .select()
+    .from(leaveRequests)
+    .innerJoin(users, eq(users.id, leaveRequests.userId))
+    .where(and(...conditions))
+    .limit(1)
+    .then((results) => results.map((r) => r.leave_requests));
   if (!req) throw new Error('Leave request not found');
   if (req.status !== 'pending' && req.status !== 'pending_director') {
     throw new Error('Request cannot be rejected at this stage');
@@ -379,8 +425,18 @@ export const rejectLeave = async (id: number, approverId: number, comment?: stri
   return getLeaveRequest(id);
 };
 
-export const directorApproveLeave = async (id: number, directorId: number, comment?: string) => {
-  const [req] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id)).limit(1);
+export const directorApproveLeave = async (id: number, directorId: number, comment?: string, organizationId?: number) => {
+  let conditions: any[] = [eq(leaveRequests.id, id)];
+  if (organizationId !== undefined) {
+    conditions.push(eq(users.organizationId, organizationId));
+  }
+  const [req] = await db
+    .select()
+    .from(leaveRequests)
+    .innerJoin(users, eq(users.id, leaveRequests.userId))
+    .where(and(...conditions))
+    .limit(1)
+    .then((results) => results.map((r) => r.leave_requests));
   if (!req) throw new Error('Leave request not found');
   if (req.status !== 'pending_director') throw new Error('Request is not pending director review');
   if (req.directorId !== directorId) throw new Error('You are not authorized to approve this request');
@@ -439,8 +495,18 @@ export const directorApproveLeave = async (id: number, directorId: number, comme
   return getLeaveRequest(id);
 };
 
-export const directorRejectLeave = async (id: number, directorId: number, comment?: string) => {
-  const [req] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id)).limit(1);
+export const directorRejectLeave = async (id: number, directorId: number, comment?: string, organizationId?: number) => {
+  let conditions: any[] = [eq(leaveRequests.id, id)];
+  if (organizationId !== undefined) {
+    conditions.push(eq(users.organizationId, organizationId));
+  }
+  const [req] = await db
+    .select()
+    .from(leaveRequests)
+    .innerJoin(users, eq(users.id, leaveRequests.userId))
+    .where(and(...conditions))
+    .limit(1)
+    .then((results) => results.map((r) => r.leave_requests));
   if (!req) throw new Error('Leave request not found');
   if (req.status !== 'pending_director') throw new Error('Request is not pending director review');
   if (req.directorId !== directorId) throw new Error('You are not authorized to reject this request');
@@ -496,26 +562,28 @@ export const directorRejectLeave = async (id: number, directorId: number, commen
   return getLeaveRequest(id);
 };
 
-export const getTeamCalendar = async (opts: { departmentId?: number; userId?: number; currentUserId?: number; month?: number; year?: number }) => {
-  const { departmentId, userId, currentUserId, month, year } = opts;
+export const getTeamCalendar = async (opts: { organizationId: number; departmentId?: number; userId?: number; currentUserId?: number; month?: number; year?: number }) => {
+  const { organizationId, departmentId, userId, currentUserId, month, year } = opts;
   const y = year || new Date().getFullYear();
   const m = month || new Date().getMonth() + 1;
   const monthStart = new Date(y, m - 1, 1);
   const monthEnd = new Date(y, m, 0);
 
-  // Build user filter
+  // Build user filter scoped to organization
   let userIds: number[] = [];
   if (userId) {
-    userIds = [userId];
+    const [targetUser] = await db.select().from(users).where(and(eq(users.id, userId), eq(users.organizationId, organizationId))).limit(1);
+    if (targetUser) userIds = [userId];
   } else if (departmentId) {
     const members = await db
       .select({ userId: departmentMembers.userId })
       .from(departmentMembers)
-      .where(eq(departmentMembers.departmentId, departmentId));
+      .innerJoin(departments, eq(departments.id, departmentMembers.departmentId))
+      .where(and(eq(departmentMembers.departmentId, departmentId), eq(departments.organizationId, organizationId)));
     userIds = members.map(m => m.userId);
   } else if (currentUserId) {
-    // Employee: show only their department members
-    const [currentUser] = await db.select().from(users).where(eq(users.id, currentUserId)).limit(1);
+    // Employee: show only their department members in same org
+    const [currentUser] = await db.select().from(users).where(and(eq(users.id, currentUserId), eq(users.organizationId, organizationId))).limit(1);
     if (currentUser?.departmentId) {
       const members = await db
         .select({ userId: departmentMembers.userId })
@@ -557,7 +625,11 @@ export const getTeamCalendar = async (opts: { departmentId?: number; userId?: nu
   return rows;
 };
 
-export const getLeaveBalance = async (userId: number) => {
+export const getLeaveBalance = async (userId: number, organizationId?: number) => {
+  if (organizationId !== undefined) {
+    const [user] = await db.select().from(users).where(and(eq(users.id, userId), eq(users.organizationId, organizationId))).limit(1);
+    if (!user) throw new Error('User not found');
+  }
   const year = new Date().getFullYear();
   const rows = await db
     .select()

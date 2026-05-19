@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, Info } from 'lucide-react';
 import apiClient from '@/lib/apiClient';
 import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
 import DataTable from '@/components/ui/DataTable';
 import Modal from '@/components/ui/Modal';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 
 export default function DelegationsPage() {
   const queryClient = useQueryClient();
@@ -77,8 +78,19 @@ export default function DelegationsPage() {
           <Plus size={16} /> Ajouter
         </button>
       </div>
+
+      <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+        <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800 dark:text-blue-300">
+          <p className="font-semibold">Qu'est-ce qu'une delegation ?</p>
+          <p className="mt-1">
+            Un manager peut deleguer temporairement ses pouvoirs d'approbation a un collegue pendant une perdonnee (ex: vacances, deplacement). Le delegataire pourra alors approuver ou refuser les demandes de conges a la place du manager.
+          </p>
+        </div>
+      </div>
+
       {isLoading ? (
-        <div className="text-sm text-gray-500">Chargement...</div>
+        <SkeletonTable rows={5} columns={5} />
       ) : (
         <DataTable columns={columns} data={data || []} />
       )}

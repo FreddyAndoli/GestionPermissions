@@ -5,7 +5,9 @@ import {
   updateBlackoutPeriod,
   deleteBlackoutPeriod
 } from '../services/blackout.service';
+import { createBlackoutSchema, updateBlackoutSchema } from '../schemas/blackout.schema';
 import { logger } from '../utils/logger';
+import { parseId } from '../utils/asyncHandler';
 
 export const getBlackoutPeriods = async (req: Request, res: Response) => {
   try {
@@ -24,13 +26,18 @@ export const getBlackoutPeriods = async (req: Request, res: Response) => {
 
 export const createBlackout = async (req: Request, res: Response) => {
   try {
+    const data = createBlackoutSchema.parse(req.body);
     const row = await createBlackoutPeriod({
-      ...req.body,
+      ...data,
       organizationId: req.user!.organizationId,
       createdBy: req.user!.id
     });
     res.status(201).json(row);
   } catch (err: any) {
+    if (err.name === 'ZodError') {
+      res.status(400).json({ error: 'Validation failed', details: err.errors });
+      return;
+    }
     logger.error('Create blackout period error', { error: err });
     res.status(400).json({ error: err.message || 'Failed to create blackout period' });
   }
@@ -38,10 +45,15 @@ export const createBlackout = async (req: Request, res: Response) => {
 
 export const updateBlackout = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
-    const row = await updateBlackoutPeriod(id, req.body);
+    const id = parseId(req.params.id);
+    const data = updateBlackoutSchema.parse(req.body);
+    const row = await updateBlackoutPeriod(id, data);
     res.json(row);
   } catch (err: any) {
+    if (err.name === 'ZodError') {
+      res.status(400).json({ error: 'Validation failed', details: err.errors });
+      return;
+    }
     logger.error('Update blackout period error', { error: err });
     res.status(400).json({ error: err.message || 'Failed to update blackout period' });
   }
@@ -49,7 +61,7 @@ export const updateBlackout = async (req: Request, res: Response) => {
 
 export const removeBlackout = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseId(req.params.id);
     await deleteBlackoutPeriod(id);
     res.json({ message: 'Blackout period deleted' });
   } catch (err: any) {

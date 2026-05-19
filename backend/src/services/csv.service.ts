@@ -1,15 +1,22 @@
 import { Response } from 'express';
 
+const FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
+
+function sanitizeCSVCell(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  let str = String(value).replace(/"/g, '""');
+  // Prefix potential formula characters with a single quote to neutralize spreadsheet formula injection
+  if (str.length > 0 && FORMULA_PREFIXES.some((p) => str.startsWith(p))) {
+    str = `'` + str;
+  }
+  return `"${str}"`;
+}
+
 export function generateCSV(rows: any[], columns: { key: string; label: string }[]): string {
   const header = columns.map((c) => `"${c.label}"`).join(',');
   const lines = rows.map((row) => {
     return columns
-      .map((c) => {
-        const value = row[c.key];
-        if (value === null || value === undefined) return '';
-        const str = String(value).replace(/"/g, '""');
-        return `"${str}"`;
-      })
+      .map((c) => sanitizeCSVCell(row[c.key]))
       .join(',');
   });
   return [header, ...lines].join('\n');

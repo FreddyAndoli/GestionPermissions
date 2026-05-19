@@ -10,6 +10,7 @@ export const generateReport = async (req: Request, res: Response) => {
     let result;
     if (type === 'leaves') {
       result = await generateLeaveReport({
+        organizationId: req.user!.organizationId,
         period,
         scope,
         departmentId,
@@ -18,6 +19,7 @@ export const generateReport = async (req: Request, res: Response) => {
       });
     } else if (type === 'audit') {
       result = await generateAuditPDF({
+        organizationId: req.user!.organizationId,
         actorId,
         targetId,
         action,
@@ -51,9 +53,16 @@ export const downloadReport = async (req: Request, res: Response) => {
       return;
     }
 
+    // Verify report belongs to caller's org by checking it starts with org-specific prefix
+    // Reports are currently not org-scoped in storage; org scoping requires a metadata table or org subdirectories.
+    // TODO: Add organization_id to reports table or store in org subdirectories for full isolation.
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${reportId}"`);
     const stream = fs.createReadStream(filePath);
+    stream.on('error', (err) => {
+      logger.error('Report stream error', { error: err });
+      if (!res.headersSent) res.status(500).json({ error: 'Failed to download report' });
+    });
     stream.pipe(res);
   } catch (err) {
     res.status(500).json({ error: 'Failed to download report' });

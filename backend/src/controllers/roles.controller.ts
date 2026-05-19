@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { listRoles, getRoleById, createRole, updateRole, deleteRole, listPermissions } from '../services/roles.service';
 import { createRoleSchema, updateRoleSchema } from '../schemas/role.schema';
 import { logger } from '../utils/logger';
+import { parseId } from '../utils/asyncHandler';
 
 export const getRoles = async (req: Request, res: Response) => {
   try {
@@ -14,8 +15,8 @@ export const getRoles = async (req: Request, res: Response) => {
 
 export const getRole = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
-    const role = await getRoleById(id);
+    const id = parseId(req.params.id);
+    const role = await getRoleById(id, req.user!.organizationId);
     if (!role) {
       res.status(404).json({ error: 'Role not found' });
       return;
@@ -43,9 +44,9 @@ export const createNewRole = async (req: Request, res: Response) => {
 
 export const updateRoleById = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseId(req.params.id);
     const data = updateRoleSchema.parse(req.body);
-    const role = await updateRole(id, data);
+    const role = await updateRole(id, data, req.user!.organizationId);
     res.json(role);
   } catch (err: any) {
     if (err.name === 'ZodError') {
@@ -58,8 +59,8 @@ export const updateRoleById = async (req: Request, res: Response) => {
 
 export const removeRole = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
-    await deleteRole(id);
+    const id = parseId(req.params.id);
+    await deleteRole(id, req.user!.organizationId);
     res.json({ message: 'Role deleted' });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Failed to delete role' });

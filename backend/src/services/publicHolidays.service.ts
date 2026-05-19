@@ -2,8 +2,8 @@ import { db } from '../config/db';
 import { publicHolidays } from '../db/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
 
-export const listPublicHolidays = async (filters: { year?: number; countryCode?: string }) => {
-  const conditions = [];
+export const listPublicHolidays = async (filters: { organizationId: number; year?: number; countryCode?: string }) => {
+  const conditions = [eq(publicHolidays.organizationId, filters.organizationId)];
   if (filters.year) {
     const start = new Date(filters.year, 0, 1);
     const end = new Date(filters.year, 11, 31);
@@ -13,8 +13,8 @@ export const listPublicHolidays = async (filters: { year?: number; countryCode?:
   if (filters.countryCode) {
     conditions.push(eq(publicHolidays.countryCode, filters.countryCode));
   }
-  const where = conditions.length > 0 ? and(...conditions) : undefined;
-  return db.select().from(publicHolidays).where(where!);
+  const where = and(...conditions);
+  return db.select().from(publicHolidays).where(where);
 };
 
 export const createPublicHoliday = async (input: {

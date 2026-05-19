@@ -15,6 +15,7 @@
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
+    "@types/ws": "^8.18.1",
     "axios": "^1.6.8",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.7.8",
@@ -35,6 +36,7 @@
     "uuid": "^14.0.0",
     "winston": "^3.13.0",
     "winston-daily-rotate-file": "^5.0.0",
+    "ws": "^8.20.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

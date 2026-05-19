@@ -8,6 +8,7 @@ import { logger } from '../utils/logger';
 
 const REDIS_SESSION_TTL = parseInt(process.env.REDIS_SESSION_TTL || '3600');
 const IS_DEV = process.env.NODE_ENV === 'development';
+const DEV_SECRET = process.env.DEV_SECRET;
 
 export const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -30,11 +31,11 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
       return;
     }
 
-    // Dev bypass: when Firebase is not configured in development, or explicit dev mode header
-    const devModeHeader = req.headers['x-dev-mode'] as string | undefined;
-    const isExplicitDevMode = IS_DEV && devModeHeader === 'true';
+    // Dev bypass: only in development, only with matching DEV_SECRET
+    const devSecretHeader = req.headers['x-dev-secret'] as string | undefined;
+    const isDevBypass = IS_DEV && DEV_SECRET && devSecretHeader === DEV_SECRET;
 
-    if ((!firebaseAuth && IS_DEV) || isExplicitDevMode) {
+    if ((!firebaseAuth && IS_DEV && isDevBypass) || isDevBypass) {
       const devEmail = req.headers['x-dev-user-email'] as string | undefined;
       if (!devEmail) {
         res.status(401).json({ error: 'Unauthorized: dev mode requires x-dev-user-email header' });
@@ -61,14 +62,14 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
         avatarUrl: dbUser.avatarUrl,
         organizationId: dbUser.organizationId,
         departmentId: dbUser.departmentId,
-        status: dbUser.status,
+        status: dbUser.status || 'active',
         role: dbUser.role,
         createdAt: dbUser.createdAt,
         updatedAt: dbUser.updatedAt
-      };
+      } as any;
 
       await redis.setEx(cacheKey, REDIS_SESSION_TTL, JSON.stringify(userPayload));
-      req.user = userPayload as any;
+      req.user = userPayload;
       next();
       return;
     }

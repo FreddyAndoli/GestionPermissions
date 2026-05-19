@@ -3,6 +3,7 @@ import { db } from '../config/db';
 import { leaveQuotas, leaveTypes, users, leaveCarryOverLogs, seniorityTiers } from '../db/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
 import { expireDelegations } from '../services/delegations.service';
+import { runRetentionCleanup } from '../services/retention.service';
 import { logger } from '../utils/logger';
 
 // Process carry-over on Jan 1st at 00:01
@@ -146,6 +147,17 @@ cron.schedule('1 0 * * *', async () => {
     logger.info('Delegation expiration job completed', { expiredCount: count });
   } catch (err) {
     logger.error('Delegation expiration job failed', { error: err });
+  }
+});
+
+// GDPR retention cleanup every day at 03:00 (low-traffic hour)
+cron.schedule('0 3 * * *', async () => {
+  logger.info('Running GDPR retention cleanup job');
+  try {
+    await runRetentionCleanup();
+    logger.info('GDPR retention cleanup job completed');
+  } catch (err) {
+    logger.error('GDPR retention cleanup job failed', { error: err });
   }
 });
 

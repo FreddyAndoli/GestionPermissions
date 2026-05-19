@@ -2,11 +2,10 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarDays, Info } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import PageWrapper from '@/components/layout/PageWrapper';
-import { usePermissions } from '@/hooks/usePermissions';
 import {
   startOfMonth, endOfMonth, eachDayOfInterval, format, addMonths, subMonths,
   isSameMonth, getDay
@@ -50,14 +49,10 @@ interface HolidayItem {
 export default function TeamCalendarPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedUserId, setSelectedUserId] = useState<number | ''>('');
-  const { hasPermission } = usePermissions();
-  const canViewUsers = hasPermission('users.read');
-
   const { data: users = [] } = useQuery({
     queryKey: ['users-list'],
-    enabled: canViewUsers,
     queryFn: async () => {
-      const { data } = await apiClient.get('/users?limit=1000');
+      const { data } = await apiClient.get('/users/colleagues?limit=1000');
       return (data?.data || []) as UserItem[];
     }
   });
@@ -77,7 +72,7 @@ export default function TeamCalendarPage() {
 
   const { data: balance = [] } = useQuery({
     queryKey: ['leave-balance', selectedUserId],
-    enabled: !!selectedUserId && canViewUsers,
+    enabled: !!selectedUserId,
     queryFn: async () => {
       const { data } = await apiClient.get(`/leaves/balance?userId=${selectedUserId}`);
       return (data || []) as BalanceItem[];
@@ -119,6 +114,16 @@ export default function TeamCalendarPage() {
 
   return (
     <PageWrapper>
+      <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+        <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800 dark:text-blue-300">
+          <p className="font-semibold">Que montre ce calendrier ?</p>
+          <p className="mt-1">
+            Visualisez les conges approuves de votre equipe mois par mois. Les jours feries apparaissent en rouge. Survolez un conge pour voir les dates detaillees et le nombre de jours.
+          </p>
+        </div>
+      </div>
+
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Calendrier equipe</h1>
@@ -127,20 +132,18 @@ export default function TeamCalendarPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {canViewUsers && (
-            <select
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value ? parseInt(e.target.value) : '')}
-              className="px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">Tous les employes</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.firstName} {u.lastName}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            value={selectedUserId}
+            onChange={(e) => setSelectedUserId(e.target.value ? parseInt(e.target.value) : '')}
+            className="px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">Tous les employes</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.firstName} {u.lastName}
+              </option>
+            ))}
+          </select>
           <div className="flex items-center gap-2">
             <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">
               <ChevronLeft size={18} />

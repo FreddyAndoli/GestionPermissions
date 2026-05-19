@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
   first_name VARCHAR(255) NOT NULL,
   last_name VARCHAR(255) NOT NULL,
   avatar_url VARCHAR(500),
+  phone_number VARCHAR(30),
   organization_id INT NOT NULL,
   department_id INT,
   sub_department_id INT,
@@ -135,6 +136,7 @@ CREATE TABLE IF NOT EXISTS departments (
   organization_id INT NOT NULL,
   name VARCHAR(255) NOT NULL,
   description TEXT,
+  type ENUM('department','team','unit','group','branch') DEFAULT 'department',
   director_id INT,
   manager_id INT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -149,15 +151,6 @@ CREATE TABLE IF NOT EXISTS departments (
 ALTER TABLE users
   ADD CONSTRAINT fk_users_department
   FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL;
-
--- Ensure sub_department_id column exists on existing users table
-ALTER TABLE users
-ADD COLUMN IF NOT EXISTS sub_department_id INT
-AFTER department_id;
-
--- Ensure index exists for FK performance
-ALTER TABLE users
-ADD INDEX IF NOT EXISTS idx_users_sub_department (sub_department_id);
 
 -- 11. department_members
 CREATE TABLE IF NOT EXISTS department_members (
@@ -413,12 +406,19 @@ CREATE TABLE IF NOT EXISTS proxy_requests (
   proxy_user_id INT NOT NULL,
   permission_id INT NOT NULL,
   reason TEXT,
+  attachment_url VARCHAR(500),
+  attachment_name VARCHAR(255),
+  attachment_mime_type VARCHAR(100),
   beneficiary_confirmed ENUM('pending','confirmed','rejected') DEFAULT 'pending',
+  status ENUM('pending','approved','rejected') DEFAULT 'pending',
+  approved_by INT,
+  approved_at TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (beneficiary_user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (proxy_user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+  FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+  FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 24. invitations
@@ -553,16 +553,23 @@ CREATE TABLE IF NOT EXISTS messages (
   INDEX idx_messages_conversation (conversation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 33. consent_logs (GDPR consent tracking)
+CREATE TABLE IF NOT EXISTS consent_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  purpose VARCHAR(100) NOT NULL,
+  lawful_basis ENUM('contract', 'legal_obligation', 'legitimate_interest', 'consent') NOT NULL,
+  granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  withdrawn_at TIMESTAMP NULL,
+  ip_address VARCHAR(45),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_consent_user (user_id),
+  INDEX idx_consent_purpose (purpose),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 -- Migrations de compatibilite (anciens fichiers 06 et 07 fusionnes)
 -- ============================================================
 
--- Ajout de la colonne is_paid sur leave_types si manquante
-ALTER TABLE leave_types
-ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT TRUE
-AFTER deductible_quota;
-
--- Ajout de la colonne phone_number sur users si manquante
-ALTER TABLE users
-ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30)
-AFTER avatar_url;
+-- NOTE: colonnes is_paid (leave_types) et phone_number (users) deja presentes dans CREATE TABLE

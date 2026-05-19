@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileDown } from 'lucide-react';
+import { Plus, FileDown, Info } from 'lucide-react';
 import apiClient from '@/lib/apiClient';
 import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
 import DataTable from '@/components/ui/DataTable';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Modal from '@/components/ui/Modal';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 
 export default function LeavesPage() {
   const queryClient = useQueryClient();
@@ -43,8 +44,7 @@ export default function LeavesPage() {
   const createLeave = useMutation({
     mutationFn: async () => {
       await apiClient.post('/leaves', {
-        startDate,
-        endDate,
+        periods: [{ startDate, endDate }],
         reason,
         leaveTypeId: leaveTypeId ? parseInt(leaveTypeId) : undefined
       });
@@ -59,6 +59,8 @@ export default function LeavesPage() {
     }
   });
 
+  const leaveError = createLeave.error as any;
+
   const columns = [
     { key: 'id', label: 'ID' },
     {
@@ -72,6 +74,16 @@ export default function LeavesPage() {
 
   return (
     <PageWrapper>
+      <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+        <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800 dark:text-blue-300">
+          <p className="font-semibold">Comment demander un conge ?</p>
+          <p className="mt-1">
+            Choisissez les dates, le type de conge et un motif optionnel. Votre manager sera notifie et pourra approuver ou refuser la demande. Vous pouvez consulter votre solde restant sur le tableau de bord.
+          </p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Conges</h1>
         <div className="flex items-center gap-2">
@@ -87,8 +99,8 @@ export default function LeavesPage() {
                 link.click();
                 link.remove();
                 window.URL.revokeObjectURL(url);
-              } catch {
-                // ignore
+              } catch (err: any) {
+                console.error('CSV export error', err);
               }
             }}
             className="inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-700 border dark:border-slate-600 rounded-lg text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50"
@@ -104,7 +116,7 @@ export default function LeavesPage() {
         </div>
       </div>
       {isLoading ? (
-        <div className="text-sm text-gray-500">Chargement...</div>
+        <SkeletonTable rows={6} columns={5} />
       ) : (
         <DataTable columns={columns} data={data || []} />
       )}
@@ -155,6 +167,11 @@ export default function LeavesPage() {
               className="w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none"
             />
           </div>
+          {leaveError && (
+            <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+              {leaveError?.response?.data?.error || leaveError?.message || "Une erreur s'est produite."}
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button
               onClick={() => setModalOpen(false)}

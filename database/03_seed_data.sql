@@ -18,6 +18,7 @@ INSERT INTO modules (organization_id, slug, name, description) VALUES
   (@org_id, 'reports', 'Rapports', 'Rapports et analyses'),
   (@org_id, 'notifications', 'Notifications', 'Centre de notifications'),
   (@org_id, 'messages', 'Messagerie', 'Communication interne'),
+  (@org_id, 'proxy_requests', 'Procuration', 'Demandes par procuration'),
   (@org_id, 'admin', 'Administration', 'Configuration et administration');
 
 -- Permissions atomiques par module
@@ -93,6 +94,14 @@ INSERT INTO permissions (module_id, slug, name, action) VALUES
   (@mod_msgs, 'messages.create', 'Envoyer un message', 'create'),
   (@mod_msgs, 'messages.read', 'Voir les messages', 'read');
 
+-- proxy_requests
+SET @mod_proxy = (SELECT id FROM modules WHERE slug = 'proxy_requests' LIMIT 1);
+INSERT INTO permissions (module_id, slug, name, action) VALUES
+  (@mod_proxy, 'proxy_requests.create', 'Creer une demande de procuration', 'create'),
+  (@mod_proxy, 'proxy_requests.read', 'Voir les demandes de procuration', 'read'),
+  (@mod_proxy, 'proxy_requests.approve', 'Approuver une demande de procuration', 'approve'),
+  (@mod_proxy, 'proxy_requests.delete', 'Supprimer une demande de procuration', 'delete');
+
 -- admin
 SET @mod_admin = (SELECT id FROM modules WHERE slug = 'admin' LIMIT 1);
 INSERT INTO permissions (module_id, slug, name, action) VALUES
@@ -136,6 +145,12 @@ SELECT @role_emp, id FROM permissions WHERE slug IN (
   'messages.create', 'messages.read', 'notifications.read'
 );
 
+-- Departement par defaut (pour eviter le message "No department created")
+INSERT INTO departments (organization_id, name, description, type) VALUES
+  (@org_id, 'Direction Generale', 'Departement principal de direction', 'department');
+
+SET @default_dept_id = LAST_INSERT_ID();
+
 -- Types de conges par defaut
 INSERT INTO leave_types (organization_id, name, slug, default_quota, validation_mode, is_cumulative, carry_over_limit, deductible_quota, is_paid, color) VALUES
   (@org_id, 'Conges payes', 'paid_leave', 25, 'manager', TRUE, 10, TRUE, TRUE, '#22C55E'),
@@ -163,24 +178,7 @@ INSERT INTO public_holidays (organization_id, name, holiday_date, country_code, 
   (@org_id, 'Fete de la Martyrologie', CONCAT(YEAR(CURDATE()), '-06-21'), 'TG', FALSE),
   (@org_id, 'Assomption', CONCAT(YEAR(CURDATE()), '-08-15'), 'TG', FALSE),
   (@org_id, 'Toussaint', CONCAT(YEAR(CURDATE()), '-11-01'), 'TG', FALSE),
-  (@org_id, 'Fete nationale (anniversaire de l\'independance)', CONCAT(YEAR(CURDATE()), '-04-27'), 'TG', FALSE),
   (@org_id, 'Noel', CONCAT(YEAR(CURDATE()), '-12-25'), 'TG', FALSE);
 
 
 USE permission_manager;
-
-  INSERT INTO modules (organization_id, slug, name, description)
-  SELECT id, 'leave_types', 'Types de conges', 'Gestion des types de conges'
-  FROM organizations LIMIT 1;
-
-  SET @mod_lt = (SELECT id FROM modules WHERE slug = 'leave_types' LIMIT 1);
-
-  INSERT INTO permissions (module_id, slug, name, action) VALUES
-    (@mod_lt, 'leave_types.create', 'Creer un type de conge', 'create'),
-    (@mod_lt, 'leave_types.read', 'Voir les types de conges', 'read'),
-    (@mod_lt, 'leave_types.update', 'Modifier un type de conge', 'update'),
-    (@mod_lt, 'leave_types.delete', 'Supprimer un type de conge', 'delete');
-
-  SET @role_sa = (SELECT id FROM roles WHERE name = 'Super Admin' LIMIT 1);
-  INSERT INTO role_permissions (role_id, permission_id)
-  SELECT @role_sa, id FROM permissions WHERE slug LIKE 'leave_types.%';

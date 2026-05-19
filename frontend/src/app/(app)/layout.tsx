@@ -2,6 +2,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import OnboardingTour from '@/components/ui/OnboardingTour';
+import AnnouncementToast from '@/components/ui/AnnouncementToast';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -13,6 +14,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <main className="p-6">{children}</main>
         </div>
         <OnboardingTour />
+        <AnnouncementToast />
       </div>
     </ProtectedRoute>
   );

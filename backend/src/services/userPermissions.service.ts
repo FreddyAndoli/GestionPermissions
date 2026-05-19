@@ -1,9 +1,13 @@
 import { db } from '../config/db';
-import { userPermissions, permissions } from '../db/schema';
+import { userPermissions, permissions, users } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { invalidateUserPermissions } from './permissionsResolver.service';
 
-export const getUserPermissions = async (userId: number) => {
+export const getUserPermissions = async (userId: number, organizationId?: number) => {
+  const conditions = [eq(userPermissions.userId, userId)];
+  if (organizationId !== undefined) {
+    conditions.push(eq(users.organizationId, organizationId));
+  }
   const rows = await db
     .select({
       id: userPermissions.id,
@@ -19,7 +23,8 @@ export const getUserPermissions = async (userId: number) => {
     })
     .from(userPermissions)
     .leftJoin(permissions, eq(userPermissions.permissionId, permissions.id))
-    .where(eq(userPermissions.userId, userId));
+    .innerJoin(users, eq(users.id, userPermissions.userId))
+    .where(and(...conditions));
   return rows;
 };
 
@@ -28,7 +33,11 @@ export const setUserPermission = async (input: {
   permissionId: number;
   granted: boolean;
   comment?: string;
-}) => {
+}, organizationId?: number) => {
+  if (organizationId !== undefined) {
+    const [user] = await db.select().from(users).where(and(eq(users.id, input.userId), eq(users.organizationId, organizationId))).limit(1);
+    if (!user) throw new Error('User not found');
+  }
   const [existing] = await db
     .select()
     .from(userPermissions)
@@ -55,11 +64,21 @@ export const setUserPermission = async (input: {
   }
 
   await invalidateUserPermissions(input.userId);
-  return getUserPermissions(input.userId);
+  return getUserPermissions(input.userId, organizationId);
 };
 
-export const deleteUserPermission = async (id: number) => {
-  const [row] = await db.select().from(userPermissions).where(eq(userPermissions.id, id)).limit(1);
+export const deleteUserPermission = async (id: number, organizationId?: number) => {
+  let conditions: any[] = [eq(userPermissions.id, id)];
+  if (organizationId !== undefined) {
+    conditions.push(eq(users.organizationId, organizationId));
+  }
+  const results = await db
+    .select()
+    .from(userPermissions)
+    .innerJoin(users, eq(users.id, userPermissions.userId))
+    .where(and(...conditions))
+    .limit(1);
+  const row = results[0]?.user_permissions;
   if (!row) return null;
   await db.delete(userPermissions).where(eq(userPermissions.id, id));
   await invalidateUserPermissions(row.userId);

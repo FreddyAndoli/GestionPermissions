@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { db } from '../config/db';
 import { getRedisClient } from '../config/redis';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
-router.get('/', async (_req, res) => {
+router.get('/', asyncHandler(async (_req, res) => {
   const services: any = {};
 
   // MySQL
@@ -40,6 +41,6 @@ router.get('/', async (_req, res) => {
     timestamp: new Date().toISOString(),
     services
   });
-});
+}));
 
 export default router;

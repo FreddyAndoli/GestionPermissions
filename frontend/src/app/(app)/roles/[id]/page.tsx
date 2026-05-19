@@ -7,6 +7,7 @@ import { Save, ArrowLeft, ShieldCheck } from 'lucide-react';
 import apiClient from '@/lib/apiClient';
 import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useRouter } from 'next/navigation';
 
 export default function RoleDetailPage() {
@@ -55,7 +56,16 @@ export default function RoleDetailPage() {
     }
   });
 
-  if (isLoading || !role) return <div className="p-6">Chargement...</div>;
+  if (isLoading || !role) {
+    return (
+      <PageWrapper>
+        <div className="max-w-3xl mx-auto space-y-6">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      </PageWrapper>
+    );
+  }
 
   // Group permissions by module
   const permsByModule: Record<string, any[]> = {};

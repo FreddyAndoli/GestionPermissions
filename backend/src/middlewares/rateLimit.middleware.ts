@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getRedisClient } from '../config/redis';
+import { logger } from '../utils/logger';
 
 const WINDOW = parseInt(process.env.REDIS_RATE_LIMIT_WINDOW || '60');
 const MAX = parseInt(process.env.REDIS_RATE_LIMIT_MAX || '100');
@@ -24,7 +25,9 @@ export const rateLimitMiddleware = async (req: Request, res: Response, next: Nex
     }
 
     next();
-  } catch {
-    next();
+  } catch (err) {
+    logger.error('Rate limiter error', { error: err });
+    // Fail open is unsafe; fail closed with a 429 when Redis is unavailable.
+    res.status(429).json({ error: 'Rate limiter unavailable. Please retry later.' });
   }
 };

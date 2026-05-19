@@ -6,13 +6,25 @@ import { eq, and } from 'drizzle-orm';
 import { approveLeave, rejectLeave } from '../services/leaves.service';
 import { sendNotification } from '../services/notifications.service';
 import { logger } from '../utils/logger';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
+
+// Verify Telegram webhook secret token
+const verifyWebhookSecret = (req: any, res: any, next: any) => {
+  const secret = req.headers['x-telegram-bot-api-secret-token'];
+  if (!TELEGRAM_WEBHOOK_SECRET || secret !== TELEGRAM_WEBHOOK_SECRET) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  next();
+};
 
 // Bot info endpoint for QR code generation
-router.get('/bot-info', async (_req, res) => {
+router.get('/bot-info', asyncHandler(async (_req, res) => {
   try {
     if (!BOT_TOKEN) {
       res.status(503).json({ error: 'Telegram bot not configured' });
@@ -28,10 +40,10 @@ router.get('/bot-info', async (_req, res) => {
     logger.error('Telegram bot info error', { error: err });
     res.status(502).json({ error: 'Failed to fetch bot info' });
   }
-});
+}));
 
 // Telegram webhook endpoint
-router.post('/webhook', async (req, res) => {
+router.post('/webhook', verifyWebhookSecret, asyncHandler(async (req, res) => {
   try {
     const { message, callback_query } = req.body;
 
@@ -112,6 +124,6 @@ router.post('/webhook', async (req, res) => {
     logger.error('Telegram webhook error', { error: err });
     res.json({ ok: true }); // Always return 200 to Telegram
   }
-});
+}));
 
 export default router;

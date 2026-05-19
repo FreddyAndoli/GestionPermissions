@@ -1,21 +1,24 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { useDensity } from '@/hooks/useDensity';
+import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
 import apiClient from '@/lib/apiClient';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 import { auth } from '@/lib/firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { QRCodeSVG } from 'qrcode.react';
-import { Save, Sun, Moon, Monitor, Smartphone, Mail, MessageCircle, User, Lock, Eye, EyeOff, Hash, Link, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Save, Sun, Moon, Monitor, Smartphone, Mail, MessageCircle, User, Lock, Eye, EyeOff, Hash, Link, CheckCircle, ChevronDown, ChevronUp, Building2, ShieldCheck, XCircle, Info } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const { user, organization, loading: authLoading, isAuthenticated } = useAuth();
   const { theme, setTheme } = useTheme();
   const { density, setDensity } = useDensity();
+  const { isAdmin } = usePermissions();
   const queryClient = useQueryClient();
 
   const [firstName, setFirstName] = useState(user?.firstName || '');
@@ -39,13 +42,35 @@ export default function SettingsPage() {
   const [botInfo, setBotInfo] = useState<any>(null);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [orgName, setOrgName] = useState('');
+  const [orgNameLoading, setOrgNameLoading] = useState(false);
+  const [orgNameError, setOrgNameError] = useState('');
+  const [orgNameSuccess, setOrgNameSuccess] = useState('');
+
+  const { data: consents = [] } = useQuery({
+    queryKey: ['consents', user?.id],
+    enabled: !!user && isAuthenticated,
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/users/${user?.id}/consents`);
+      return data || [];
+    }
+  });
+
+  const withdrawConsentMutation = useMutation({
+    mutationFn: async (purpose: string) => {
+      await apiClient.post(`/users/${user?.id}/consents/withdraw`, { purpose });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['consents', user?.id] });
+    }
+  });
 
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
     apiClient.get('/preferences')
       .then(({ data }) => { if (!cancelled) { setPreferences(data); setPrefsLoaded(true); } })
-      .catch(() => { if (!cancelled) setPrefsLoaded(true); });
+      .catch((err: any) => { if (!cancelled) setPrefsLoaded(true); console.error('Preferences load error', err); });
     return () => { cancelled = true; };
   }, [isAuthenticated]);
 
@@ -54,7 +79,7 @@ export default function SettingsPage() {
     let cancelled = false;
     apiClient.get('/telegram/bot-info')
       .then(({ data }) => { if (!cancelled) setBotInfo(data); })
-      .catch(() => {});
+      .catch((err: any) => { console.error('Bot info load error', err); });
     return () => { cancelled = true; };
   }, [isAuthenticated]);
 
@@ -65,6 +90,12 @@ export default function SettingsPage() {
       setAvatarUrl(user.avatarUrl || '');
     }
   }, [user]);
+
+  useEffect(() => {
+    if (organization) {
+      setOrgName(organization.name || '');
+    }
+  }, [organization]);
 
   useEffect(() => {
     if (preferences) {
@@ -104,6 +135,22 @@ export default function SettingsPage() {
     }
   });
 
+  const updateOrganization = useMutation({
+    mutationFn: async () => {
+      if (!isAuthenticated || !organization) throw new Error('Non authentifie');
+      await apiClient.put(`/organizations/${organization.id}`, { name: orgName });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth-me'] });
+      setOrgNameSuccess('Nom de l organisation mis a jour');
+      setTimeout(() => setOrgNameSuccess(''), 3000);
+    },
+    onError: (err: any) => {
+      setOrgNameError(err.response?.data?.error || 'Erreur lors de la mise a jour');
+      setTimeout(() => setOrgNameError(''), 5000);
+    }
+  });
+
   const handleChangePassword = async () => {
     setPwdError('');
     setPwdSuccess('');
@@ -140,11 +187,32 @@ export default function SettingsPage() {
     }
   };
 
-  if (authLoading || !user) return <div className="p-6">Chargement...</div>;
+  if (authLoading || !user) {
+    return (
+      <PageWrapper>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Parametres</h1>
+
+      <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+        <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800 dark:text-blue-300">
+          <p className="font-semibold">Personnalisez votre experience</p>
+          <p className="mt-1">
+            Changez le theme (clair, sombre, ou systeme), la densite d'affichage, et vos preferences de notification. Vous pouvez aussi modifier votre mot de passe et configurer l'authentification a deux facteurs pour plus de securite.
+          </p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Profil */}
@@ -214,6 +282,51 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+
+        {/* Organisation */}
+        {organization && (
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border dark:border-slate-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Building2 size={18} /> Organisation
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Nom de l entreprise
+                </label>
+                <input
+                  type="text"
+                  value={orgName}
+                  onChange={(e) => {
+                    setOrgName(e.target.value);
+                    setOrgNameError('');
+                    setOrgNameSuccess('');
+                  }}
+                  readOnly={!isAdmin()}
+                  className={`w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none ${
+                    !isAdmin() ? 'cursor-not-allowed opacity-70' : ''
+                  }`}
+                />
+                {!isAdmin() && (
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                    Seul le Super Admin peut modifier ce champ.
+                  </p>
+                )}
+              </div>
+              {orgNameError && <p className="text-sm text-red-600">{orgNameError}</p>}
+              {orgNameSuccess && <p className="text-sm text-green-600">{orgNameSuccess}</p>}
+              {isAdmin() && (
+                <button
+                  onClick={() => updateOrganization.mutate()}
+                  disabled={updateOrganization.isPending || !orgName.trim()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  <Save size={14} /> Enregistrer
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Apparence */}
         <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border dark:border-slate-700">
@@ -445,25 +558,86 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* Securite */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border dark:border-slate-700 lg:col-span-2">
+        {/* Consentements GDPR */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border dark:border-slate-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <Lock size={18} /> Securite
+            <ShieldCheck size={18} /> Consentements
           </h2>
-          <button
-            onClick={() => {
-              setPwdModalOpen(true);
-              setPwdError('');
-              setPwdSuccess('');
-              setCurrentPwd('');
-              setNewPwd('');
-              setConfirmPwd('');
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
-          >
-            <Lock size={14} /> Changer le mot de passe
-          </button>
+          <div className="space-y-3">
+            {consents.length === 0 && <p className="text-sm text-gray-500 dark:text-slate-400">Aucun consentement enregistré.</p>}
+            {consents.map((c: any) => {
+              const isRequired = ['account_management', 'leave_processing'].includes(c.purpose);
+              const isActive = !c.withdrawnAt;
+              const purposeLabels: Record<string, string> = {
+                account_management: 'Gestion du compte',
+                leave_processing: 'Traitement des congés',
+                notifications: 'Notifications',
+                analytics: 'Analyses et améliorations'
+              };
+              const basisLabels: Record<string, string> = {
+                contract: 'Contrat',
+                legal_obligation: 'Obligation légale',
+                legitimate_interest: 'Intérêt légitime',
+                consent: 'Consentement'
+              };
+              return (
+                <div key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-slate-700/50">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{purposeLabels[c.purpose] || c.purpose}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                      Base légale : {basisLabels[c.lawfulBasis] || c.lawfulBasis}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isActive ? (
+                      <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                        <CheckCircle size={12} /> Actif
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
+                        <XCircle size={12} /> Retiré
+                      </span>
+                    )}
+                    {!isRequired && isActive && (
+                      <button
+                        onClick={() => withdrawConsentMutation.mutate(c.purpose)}
+                        disabled={withdrawConsentMutation.isPending}
+                        className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                      >
+                        Retirer
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-xs text-gray-500 dark:text-slate-400">
+            Les consentements marqués "Contrat" sont obligatoires pour le fonctionnement du service et ne peuvent pas être retirés.
+          </p>
         </div>
+
+        {/* Securite */}
+        {auth && (
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border dark:border-slate-700 lg:col-span-2">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Lock size={18} /> Securite
+            </h2>
+            <button
+              onClick={() => {
+                setPwdModalOpen(true);
+                setPwdError('');
+                setPwdSuccess('');
+                setCurrentPwd('');
+                setNewPwd('');
+                setConfirmPwd('');
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <Lock size={14} /> Changer le mot de passe
+            </button>
+          </div>
+        )}
       </div>
 
       {pwdModalOpen && (
