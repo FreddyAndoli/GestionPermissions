@@ -65,7 +65,7 @@ export default function LoginPage() {
     >
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-center">Permission Manager</h1>
 
-      {hasFirebaseConfig && (
+      {hasFirebaseConfig && mounted && (
         <div className="mb-4 flex items-center justify-center">
           <button
             type="button"

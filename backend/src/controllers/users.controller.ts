@@ -41,6 +41,23 @@ export const exportUsersCSV = async (req: Request, res: Response) => {
   }
 };
 
+export const getColleagues = async (req: Request, res: Response) => {
+  try {
+    const { search, limit } = req.query;
+    const result = await listUsers({
+      organizationId: req.user!.organizationId,
+      page: 1,
+      limit: limit ? parseInt(limit as string) : 100,
+      search: search as string,
+      status: 'active'
+    });
+    res.json(result);
+  } catch (err) {
+    logger.error('Get colleagues error', { error: err });
+    res.status(500).json({ error: 'Failed to fetch colleagues' });
+  }
+};
+
 export const getUsers = async (req: Request, res: Response) => {
   try {
     const { page, limit, search, role, status, departmentId } = req.query;
@@ -105,6 +122,14 @@ export const createNewUser = async (req: Request, res: Response) => {
     if (err.name === 'ZodError') {
       logger.warn('Create user validation failed', { errors: err.errors, body: req.body });
       res.status(400).json({ error: 'Validation failed', details: err.errors });
+      return;
+    }
+    if (err.code === 'auth/email-already-exists') {
+      res.status(409).json({ error: 'Cet email est deja utilise. Essayez la reinitialisation de mot de passe ou utilisez un autre email.' });
+      return;
+    }
+    if (err.code === 'auth/invalid-email') {
+      res.status(400).json({ error: 'Adresse email invalide.' });
       return;
     }
     logger.error('Create user error', { error: err });

@@ -2,10 +2,7 @@ import axios from 'axios';
 import { auth } from './firebase';
 
 const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  baseURL: process.env.NEXT_PUBLIC_API_URL
 });
 
 apiClient.interceptors.request.use(async (config) => {

@@ -3,13 +3,14 @@ import { authMiddleware } from '../middlewares/auth.middleware';
 import { rateLimitMiddleware } from '../middlewares/rateLimit.middleware';
 import { requirePermission } from '../middlewares/role.middleware';
 import { adminBoundaryMiddleware } from '../middlewares/adminBoundary.middleware';
-import { getUsers, getUser, createNewUser, updateUserById, deactivateUser, exportUsersCSV, bulkCreateUsersController, updateUserRolesController, resetPasswordController, eraseUser, exportUserDataController, getUserConsentsController, withdrawConsentController, hardDeleteUserController } from '../controllers/users.controller';
+import { getUsers, getColleagues, getUser, createNewUser, updateUserById, deactivateUser, exportUsersCSV, bulkCreateUsersController, updateUserRolesController, resetPasswordController, eraseUser, exportUserDataController, getUserConsentsController, withdrawConsentController, hardDeleteUserController } from '../controllers/users.controller';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
 router.use(adminBoundaryMiddleware);
 
+router.get('/colleagues', authMiddleware, asyncHandler(getColleagues));
 router.get('/', authMiddleware, requirePermission('users.read'), getUsers);
 router.get('/export/csv', authMiddleware, requirePermission('users.read'), exportUsersCSV);
 router.post('/', authMiddleware, rateLimitMiddleware, requirePermission('users.create'), createNewUser);

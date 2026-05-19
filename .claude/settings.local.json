@@ -69,7 +69,17 @@
       "Bash(docker exec *)",
       "Bash(wget -qO- http://localhost/api/v1/health)",
       "Bash(wget -qO- http://localhost/login)",
-      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost/health\" -UseBasicParsing -TimeoutSec 10; Write-Host \"Backend health: $\\($r.StatusCode\\) $\\($r.Content\\)\" } catch { Write-Host \"Backend health failed: $_\" })"
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost/health\" -UseBasicParsing -TimeoutSec 10; Write-Host \"Backend health: $\\($r.StatusCode\\) $\\($r.Content\\)\" } catch { Write-Host \"Backend health failed: $_\" })",
+      "Bash(Get-ChildItem -Recurse -File)",
+      "Bash(Select-Object FullName)",
+      "Bash(xargs wc -l)",
+      "PowerShell(netsh interface *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(.\\\\scripts\\\\check-ports.ps1)",
+      "PowerShell(powershell.exe -ExecutionPolicy Bypass -File \".\\\\scripts\\\\check-ports.ps1\")",
+      "PowerShell(& \"C:\\\\workshop\\\\dev\\\\Freddy\\\\scripts\\\\check-ports.ps1\")",
+      "Bash(docker-compose restart *)",
+      "Bash(git -C C:/workshop/dev/Freddy ls-files)"
     ]
   }
 }

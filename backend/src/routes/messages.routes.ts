@@ -2,12 +2,22 @@ import { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { db } from '../config/db';
 import { conversations, conversationParticipants, messages, users } from '../db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, desc } from 'drizzle-orm';
 import { Request, Response } from 'express';
-import { asyncHandler } from '../utils/asyncHandler';
+import { asyncHandler, parseId } from '../utils/asyncHandler';
 import { broadcastToConversation } from '../services/websocket.service';
+import { z } from 'zod';
 
 const router = Router();
+
+const createConversationSchema = z.object({
+  participantIds: z.array(z.number().int().positive()).min(1),
+  title: z.string().max(255).optional()
+});
+
+const sendMessageSchema = z.object({
+  content: z.string().min(1).max(5000)
+});
 
 router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
   const participantRows = await db
@@ -32,7 +42,7 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
       .select()
       .from(messages)
       .where(eq(messages.conversationId, conv.id))
-      .orderBy(messages.createdAt)
+      .orderBy(desc(messages.createdAt))
       .limit(1);
 
     enriched.push({ ...conv, participants, lastMessage });
@@ -42,8 +52,18 @@ router.get('/', authMiddleware, asyncHandler(async (req: Request, res: Response)
 }));
 
 router.post('/', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
-  const { participantIds, title } = req.body;
+  const { participantIds, title } = createConversationSchema.parse(req.body);
   const allIds = [...new Set([...participantIds, req.user!.id])];
+
+  // Verify all participants exist
+  const existingUsers = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(inArray(users.id, allIds));
+  if (existingUsers.length !== allIds.length) {
+    res.status(400).json({ error: 'One or more participant IDs are invalid' });
+    return;
+  }
 
   const [conv] = await db.insert(conversations).values({ title }).$returningId();
   const convId = conv.id;
@@ -57,7 +77,7 @@ router.post('/', authMiddleware, asyncHandler(async (req: Request, res: Response
 }));
 
 router.get('/:id', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
-  const id = parseInt(req.params.id);
+  const id = parseId(req.params.id);
 
   const [participant] = await db
     .select()
@@ -74,6 +94,11 @@ router.get('/:id', authMiddleware, asyncHandler(async (req: Request, res: Respon
   }
 
   const conv = await db.select().from(conversations).where(eq(conversations.id, id)).limit(1);
+  if (!conv[0]) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+
   const msgs = await db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt);
   const participants = await db
     .select({ id: users.id, firstName: users.firstName, lastName: users.lastName, email: users.email })
@@ -85,8 +110,8 @@ router.get('/:id', authMiddleware, asyncHandler(async (req: Request, res: Respon
 }));
 
 router.post('/:id/messages', authMiddleware, asyncHandler(async (req: Request, res: Response) => {
-  const id = parseInt(req.params.id);
-  const { content } = req.body;
+  const id = parseId(req.params.id);
+  const { content } = sendMessageSchema.parse(req.body);
 
   const [participant] = await db
     .select()

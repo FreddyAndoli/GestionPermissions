@@ -56,6 +56,17 @@ export default function UserDetailPage() {
     }
   });
 
+  const groupTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      department: 'Departement',
+      team: 'Equipe',
+      unit: 'Unite',
+      group: 'Groupe',
+      branch: 'Succursale'
+    };
+    return labels[type] || type;
+  };
+
   const { data: allRoles = [] } = useQuery({
     queryKey: ['roles-list-user'],
     enabled: canReadRoles,
@@ -218,20 +229,20 @@ export default function UserDetailPage() {
                 >
                   <option value="active">Actif</option>
                   <option value="inactive">Inactif</option>
-                  <option value="suspended">Suspendu</option>
-                  <option value="pending">En attente</option>
+                  <option value="locked">Verrouille</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Departement</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Groupe / Departement / Equipe</label>
                 <select
                   value={departmentId}
                   onChange={(e) => setDepartmentId(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none"
+                  required
                 >
-                  <option value="">Aucun</option>
+                  <option value="">Choisir...</option>
                   {departments.map((d: any) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
+                    <option key={d.id} value={d.id}>[{groupTypeLabel(d.type || 'department')}] {d.name}</option>
                   ))}
                 </select>
               </div>

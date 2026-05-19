@@ -62,7 +62,8 @@ export default function AuditPage() {
             onClick={async () => {
               try {
                 const { data } = await apiClient.post('/reports/generate', { type: 'audit', action });
-                const res = await apiClient.get(data.downloadUrl, { responseType: 'blob' });
+                const downloadPath = data.downloadUrl.replace(/^\/api\/v1/, '');
+                const res = await apiClient.get(downloadPath, { responseType: 'blob' });
                 const url = window.URL.createObjectURL(new Blob([res.data]));
                 const link = document.createElement('a');
                 link.href = url;

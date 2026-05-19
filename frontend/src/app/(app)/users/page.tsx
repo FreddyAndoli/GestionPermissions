@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { Plus, FileDown, Upload, Eye, EyeOff, AlertTriangle, Building2 } from 'lucide-react';
+import { Plus, FileDown, Upload, AlertTriangle } from 'lucide-react';
 import apiClient from '@/lib/apiClient';
 import { usePermissions } from '@/hooks/usePermissions';
 import PageWrapper from '@/components/layout/PageWrapper';
@@ -29,10 +29,6 @@ export default function UsersPage() {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [pwdError, setPwdError] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
@@ -74,6 +70,17 @@ export default function UsersPage() {
     }
   });
 
+  const groupTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      department: 'Departement',
+      team: 'Equipe',
+      unit: 'Unite',
+      group: 'Groupe',
+      branch: 'Succursale'
+    };
+    return labels[type] || type;
+  };
+
   const { data: roles = [] } = useQuery({
     queryKey: ['roles-list-users'],
     enabled: canReadRoles,
@@ -85,31 +92,23 @@ export default function UsersPage() {
 
   const createUser = useMutation({
     mutationFn: async () => {
-      if (password !== confirmPassword) {
-        throw new Error('Les mots de passe ne correspondent pas');
-      }
       await apiClient.post('/users', {
         firstName,
         lastName,
         email,
         phoneNumber: phoneNumber || undefined,
-        password,
         departmentId: departmentId ? parseInt(departmentId) : undefined,
         roleIds: selectedRoleIds.length > 0 ? selectedRoleIds : undefined
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      setCreatedInfo({ email, password });
+      setCreatedInfo({ email, password: 'Envoye par email' });
       setModalOpen(false);
       setFirstName('');
       setLastName('');
       setEmail('');
       setPhoneNumber('');
-      setPassword('');
-      setConfirmPassword('');
-      setPwdError('');
-      setShowPassword(false);
       setDepartmentId('');
       setSelectedRoleIds([]);
     },
@@ -117,9 +116,9 @@ export default function UsersPage() {
       const details = err.response?.data?.details;
       const serverMsg = err.response?.data?.error;
       if (details && Array.isArray(details)) {
-        setPwdError(details.map((d: any) => `${d.path?.join('.') || 'field'}: ${d.message}`).join('; '));
+        alert(details.map((d: any) => `${d.path?.join('.') || 'field'}: ${d.message}`).join('; '));
       } else {
-        setPwdError(serverMsg || err.message || 'Erreur lors de la creation');
+        alert(serverMsg || err.message || 'Erreur lors de la creation');
       }
     }
   });
@@ -284,7 +283,7 @@ export default function UsersPage() {
         </div>
       </Modal>
 
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setPassword(''); setConfirmPassword(''); setShowPassword(false); setPwdError(''); setPhoneNumber(''); }} title="Ajouter un utilisateur">
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setPhoneNumber(''); setDepartmentId(''); setEmailError(''); }} title="Ajouter un utilisateur">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -338,64 +337,23 @@ export default function UsersPage() {
               className="w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Mot de passe <span className="text-red-500">*</span></label>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setPwdError(''); }}
-                placeholder="Min. 6 caracteres"
-                minLength={6}
-                required
-                className="w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-[26px] text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200"
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Confirmer le mot de passe <span className="text-red-500">*</span></label>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={confirmPassword}
-                onChange={(e) => { setConfirmPassword(e.target.value); setPwdError(''); }}
-                placeholder="Repeter le mot de passe"
-                minLength={6}
-                required
-                className="w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-[26px] text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200"
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
+          <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-700 dark:text-blue-400">
+            Un mot de passe temporaire sera genere automatiquement et envoye par email a l utilisateur.
           </div>
-          {password && password.length < 6 && (
-            <p className="text-sm text-amber-600">Le mot de passe doit contenir au moins 6 caracteres</p>
-          )}
-          {password && confirmPassword && password !== confirmPassword && (
-            <p className="text-sm text-amber-600">Les mots de passe ne correspondent pas</p>
-          )}
-          {pwdError && <p className="text-sm text-red-600">{pwdError}</p>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Departement</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                Groupe / Departement / Equipe <span className="text-red-500">*</span>
+              </label>
               <select
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none"
+                required
               >
-                <option value="">Aucun</option>
+                <option value="">Choisir...</option>
                 {departments.map((d: any) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
+                  <option key={d.id} value={d.id}>[{groupTypeLabel(d.type || 'department')}] {d.name}</option>
                 ))}
               </select>
             </div>
@@ -430,7 +388,7 @@ export default function UsersPage() {
                 if (!validateEmail(email)) return;
                 createUser.mutate();
               }}
-              disabled={createUser.isPending || !firstName || !lastName || !email || !password || !confirmPassword || password.length < 6 || password !== confirmPassword || !!emailError}
+              disabled={createUser.isPending || !firstName || !lastName || !email || !departmentId || !!emailError}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
               {createUser.isPending ? 'Creation...' : 'Creer'}

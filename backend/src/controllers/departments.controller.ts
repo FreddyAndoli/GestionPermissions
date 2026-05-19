@@ -31,9 +31,9 @@ export const getDepartment = async (req: Request, res: Response) => {
 
 export const createNewDepartment = async (req: Request, res: Response) => {
   try {
-    const { name, description, managerId } = req.body;
+    const { name, description, type, managerId, directorId } = req.body;
     const dept = await createDepartment({
-      name, description, organizationId: req.user!.organizationId, managerId
+      name, description, type, organizationId: req.user!.organizationId, managerId, directorId
     });
     res.status(201).json(dept);
   } catch (err) {
@@ -45,8 +45,8 @@ export const createNewDepartment = async (req: Request, res: Response) => {
 export const updateDepartmentById = async (req: Request, res: Response) => {
   try {
     const id = parseId(req.params.id);
-    const { name, description, managerId } = req.body;
-    const dept = await updateDepartment(id, { name, description, managerId }, req.user!.organizationId);
+    const { name, description, type, managerId, directorId } = req.body;
+    const dept = await updateDepartment(id, { name, description, type, managerId, directorId }, req.user!.organizationId);
     res.json(dept);
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Failed to update department' });

@@ -38,6 +38,8 @@ export const users = mysqlTable('users', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow()
 }, (table) => ({
+  firebaseIdx: index('idx_users_firebase_uid').on(table.firebaseUid),
+  emailIdx: index('idx_users_email').on(table.email),
   orgIdx: index('idx_users_organization').on(table.organizationId),
   deptIdx: index('idx_users_department').on(table.departmentId),
   subDeptIdx: index('idx_users_sub_department').on(table.subDepartmentId),
@@ -132,6 +134,7 @@ export const departments = mysqlTable('departments', {
   organizationId: int('organization_id').notNull(),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
+  type: mysqlEnum('type', ['department', 'team', 'unit', 'group', 'branch']).default('department'),
   directorId: int('director_id'),
   managerId: int('manager_id'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -348,10 +351,37 @@ export const proxyRequests = mysqlTable('proxy_requests', {
   proxyUserId: int('proxy_user_id').notNull(),
   permissionId: int('permission_id').notNull(),
   reason: text('reason'),
+  attachmentUrl: varchar('attachment_url', { length: 500 }),
+  attachmentName: varchar('attachment_name', { length: 255 }),
+  attachmentMimeType: varchar('attachment_mime_type', { length: 100 }),
   beneficiaryConfirmed: mysqlEnum('beneficiary_confirmed', ['pending', 'confirmed', 'rejected']).default('pending'),
+  status: mysqlEnum('status', ['pending', 'approved', 'rejected']).default('pending'),
+  approvedBy: int('approved_by'),
+  approvedAt: timestamp('approved_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow()
-});
+}, (table) => ({
+  beneficiaryFk: foreignKey({
+    columns: [table.beneficiaryUserId],
+    foreignColumns: [users.id],
+    name: 'fk_proxy_requests_beneficiary'
+  }).onDelete('cascade'),
+  proxyFk: foreignKey({
+    columns: [table.proxyUserId],
+    foreignColumns: [users.id],
+    name: 'fk_proxy_requests_proxy'
+  }).onDelete('cascade'),
+  permissionFk: foreignKey({
+    columns: [table.permissionId],
+    foreignColumns: [permissions.id],
+    name: 'fk_proxy_requests_permission'
+  }).onDelete('cascade'),
+  approvedByFk: foreignKey({
+    columns: [table.approvedBy],
+    foreignColumns: [users.id],
+    name: 'fk_proxy_requests_approved_by'
+  }).onDelete('set null')
+}));
 
 export const invitations = mysqlTable('invitations', {
   id: int('id').autoincrement().primaryKey(),

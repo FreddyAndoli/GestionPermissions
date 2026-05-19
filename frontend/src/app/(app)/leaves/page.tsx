@@ -44,8 +44,7 @@ export default function LeavesPage() {
   const createLeave = useMutation({
     mutationFn: async () => {
       await apiClient.post('/leaves', {
-        startDate,
-        endDate,
+        periods: [{ startDate, endDate }],
         reason,
         leaveTypeId: leaveTypeId ? parseInt(leaveTypeId) : undefined
       });
@@ -59,6 +58,8 @@ export default function LeavesPage() {
       setLeaveTypeId('');
     }
   });
+
+  const leaveError = createLeave.error as any;
 
   const columns = [
     { key: 'id', label: 'ID' },
@@ -166,6 +167,11 @@ export default function LeavesPage() {
               className="w-full px-3 py-2 rounded-lg border dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-white outline-none"
             />
           </div>
+          {leaveError && (
+            <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+              {leaveError?.response?.data?.error || leaveError?.message || "Une erreur s'est produite."}
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button
               onClick={() => setModalOpen(false)}

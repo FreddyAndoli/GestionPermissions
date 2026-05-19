@@ -18,7 +18,7 @@ docker-compose ps
 | Service | Host Port | Container | Usage |
 |---------|-----------|-----------|-------|
 | Nginx (main entry) | `80` | `80` | `http://localhost` |
-| Backend API | `4000` | `4000` | `http://localhost:4000` |
+| Backend API | `8080` | `4000` | `http://localhost:8080` |
 | Frontend | `3000` | `3000` | `http://localhost:3000` |
 | MySQL | `3307` | `3306` | `localhost:3307` |
 | Redis | — | `6379` | Internal only |
@@ -37,19 +37,23 @@ Local source code is mounted as volumes. You rarely need to rebuild.
 | `package.json` (new deps) | `docker-compose up -d --build` |
 | Dockerfile or `.sql` init scripts | `docker-compose down -v && docker-compose up -d --build` |
 
-## Database: Persistent vs Fresh
+## Database: Persistent vs Fresh (CRITICAL)
 
-The MySQL volume `freddy_mysql_data` persists across stops.
+**WARNING:** The MySQL volume `freddy_mysql_data` persists across stops, BUT only if you use the correct command.
 
 ```bash
-# KEEP data (normal daily stop)
+# KEEP all data (normal daily stop) -- USE THIS
 docker-compose down
 
-# DELETE all data and re-run init scripts on next start
+# DELETE ALL DATA PERMANENTLY (departments, users, messages, everything gone)
 docker-compose down -v
 ```
 
-Only use `-v` when you change `database/*.sql` files or need a clean slate.
+**Only use `-v` when:**
+- You changed `database/*.sql` files and need the new schema
+- You explicitly want a completely clean slate
+
+**If you accidentally ran `-v`:** All manually created data (departments, messages, users created via UI) is gone forever. The init scripts will re-run on next start, creating only the default seeded data.
 
 ## Logs
 
@@ -64,7 +68,7 @@ docker-compose logs -f nginx
 
 | Symptom | Fix |
 |---------|-----|
-| `EADDRINUSE :::4000` | Local backend still running. Stop it or run `docker-compose down` |
+| `EADDRINUSE :::4000` | Port blocked or in use. Run `node scripts/check-ports.mjs` to find safe ports |
 | `ER_NO_SUCH_TABLE` | MySQL init script failed. `docker-compose down -v && docker-compose up -d --build` |
 | Backend `unhealthy` | Check logs: `docker-compose logs backend` |
 | Frontend 404 on `/` | Normal. App Router has no root page. Browse `/login` |

@@ -17,7 +17,7 @@ const navItems = [
   { href: '/users', label: 'Utilisateurs', icon: Users, perm: 'users.read', tour: 'users' },
   { href: '/roles', label: 'Roles', icon: Shield, perm: 'roles.read', tour: 'roles' },
   { href: '/permissions', label: 'Permissions', icon: KeyRound, perm: 'permissions.read', tour: 'permissions' },
-  { href: '/departments', label: 'Departements', icon: Building2, perm: 'departments.read', tour: 'departments' },
+  { href: '/departments', label: 'Groupes', icon: Building2, perm: 'departments.read', tour: 'departments' },
   { href: '/leaves', label: 'Conges', icon: CalendarDays, perm: 'leaves.read', tour: 'leaves' },
   { href: '/leave-types', label: 'Types de conges', icon: TreePine, perm: 'leave_types.read', tour: 'leave-types' },
   { href: '/team-calendar', label: 'Calendrier equipe', icon: CalendarDays, perm: 'leaves.read', tour: 'team-calendar' },

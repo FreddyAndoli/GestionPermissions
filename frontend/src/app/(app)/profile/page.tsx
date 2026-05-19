@@ -37,7 +37,7 @@ export default function ProfilePage() {
     queryKey: ['leave-stats', user?.id],
     queryFn: async () => {
       try {
-        const { data } = await apiClient.get(`/leaves?userId=${user?.id}&limit=1`);
+        const { data } = await apiClient.get('/leaves/me');
         return data;
       } catch (err: any) {
         console.error('Leave stats error', err);

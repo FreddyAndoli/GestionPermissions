@@ -16,7 +16,7 @@ export const updateUserSchema = z.object({
   email: z.string().email().optional(),
   phoneNumber: z.string().max(30).optional(),
   departmentId: z.number().nullable().optional(),
-  status: z.enum(['active', 'inactive', 'locked', 'pending', 'suspended']).optional()
+  status: z.enum(['active', 'inactive', 'locked']).optional()
 });
 
 export const inviteUserSchema = z.object({

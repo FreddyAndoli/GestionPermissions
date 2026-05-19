@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { requirePermission } from '../middlewares/role.middleware';
 import { asyncHandler } from '../utils/asyncHandler';
+import { proxyUpload } from '../config/upload';
 import {
   getProxyRequests,
   postProxyRequest,
@@ -12,10 +13,10 @@ import {
 
 const router = Router();
 
-router.get('/', authMiddleware, asyncHandler(getProxyRequests));
-router.post('/', authMiddleware, asyncHandler(postProxyRequest));
+router.get('/', authMiddleware, requirePermission('proxy_requests.read'), asyncHandler(getProxyRequests));
+router.post('/', authMiddleware, proxyUpload.single('attachment'), asyncHandler(postProxyRequest));
 router.put('/:id/confirm', authMiddleware, asyncHandler(confirmProxy));
-router.put('/:id/approve', authMiddleware, requirePermission('admin.read'), asyncHandler(approveProxy));
+router.put('/:id/approve', authMiddleware, requirePermission('proxy_requests.approve'), asyncHandler(approveProxy));
 router.delete('/:id', authMiddleware, asyncHandler(removeProxyRequest));
 
 export default router;

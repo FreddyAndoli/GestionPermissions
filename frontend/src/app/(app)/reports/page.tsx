@@ -153,7 +153,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <a
-                    href={`${process.env.NEXT_PUBLIC_API_URL}${r.downloadUrl}`}
+                    href={r.downloadUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"

@@ -3,6 +3,7 @@ import './config/env';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import routes from './routes';
 import { errorMiddleware } from './middlewares/error.middleware';
 import { getRedisClient } from './config/redis';
@@ -41,6 +42,9 @@ app.get('/health', (_req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Serve proxy attachments statically
+app.use('/proxy-attachments', express.static(path.resolve(process.env.PDF_STORAGE_PATH || './storage', '../proxy-attachments')));
 
 // API routes
 app.use('/api/v1', routes);

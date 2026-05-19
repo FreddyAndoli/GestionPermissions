@@ -45,7 +45,7 @@ services:
     command: npm run dev
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "8080:4000"
     env_file:
       - ./backend/.env
     environment:
@@ -96,7 +96,7 @@ services:
       - ./frontend/.env
     environment:
       # Docker-specific overrides. All other vars come from env_file (frontend/.env).
-      - NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+      - NEXT_PUBLIC_API_URL=/api/v1
       - NEXT_PUBLIC_APP_URL=http://localhost
       - NEXT_PUBLIC_APP_NAME=Permission Manager
     volumes:

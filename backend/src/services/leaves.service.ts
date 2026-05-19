@@ -88,7 +88,7 @@ export const createLeaveRequest = async (input: {
   // Calculate total days
   let totalDays = 0;
   const holidays = await db.select().from(publicHolidays);
-  const holidaySet = new Set(holidays.map(h => h.holidayDate.toISOString().split('T')[0]));
+  const holidaySet = new Set(holidays.map(h => h.holidayDate as unknown as string));
 
   for (const p of input.periods) {
     const start = new Date(p.startDate);
@@ -114,7 +114,7 @@ export const createLeaveRequest = async (input: {
     for (const bp of bps) {
       // Skip department-specific blackouts that don't apply to this user's department
       if (bp.departmentId !== null && bp.departmentId !== user.departmentId) continue;
-      if (p.startDate <= bp.endDate.toISOString().split('T')[0] && p.endDate >= bp.startDate.toISOString().split('T')[0]) {
+      if (p.startDate <= (bp.endDate as unknown as string) && p.endDate >= (bp.startDate as unknown as string)) {
         throw new Error(`Blackout period: ${bp.message}`);
       }
     }

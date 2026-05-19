@@ -46,34 +46,41 @@ export default function MessagesPage() {
   const currentUserId = user?.id;
 
   const { data: conversations = [] } = useQuery({
-    queryKey: ['conversations'],
+    queryKey: ['conversations', currentUserId],
     queryFn: async () => {
       const { data } = await apiClient.get('/conversations');
       return data as Conversation[];
     },
+    enabled: !!currentUserId,
     refetchInterval: 60000 // Fallback polling every 60s; WebSocket handles real-time
   });
 
-  const { data: convDetail } = useQuery({
-    queryKey: ['conversation', selectedConv],
+  const { data: convDetail, error: convError } = useQuery({
+    queryKey: ['conversation', selectedConv, currentUserId],
     queryFn: async () => {
       if (!selectedConv) return null;
       const { data } = await apiClient.get(`/conversations/${selectedConv}`);
       return data as { conversation: Conversation; messages: MessageItem[]; participants: Conversation['participants'] };
     },
     refetchInterval: 30000,
-    enabled: !!selectedConv
+    enabled: !!selectedConv && !!currentUserId
   });
+
+  useEffect(() => {
+    if (convError && (convError as any)?.response?.status === 403) {
+      setSelectedConv(null);
+    }
+  }, [convError]);
 
   // Real-time message listener via WebSocket
   useEffect(() => {
     if (!lastMessage || lastMessage.type !== 'chat_message') return;
     const payload = lastMessage.data as { conversationId: number; message: MessageItem; sender: { firstName: string; lastName: string } };
     if (payload.conversationId === selectedConv) {
-      queryClient.invalidateQueries({ queryKey: ['conversation', selectedConv] });
+      queryClient.invalidateQueries({ queryKey: ['conversation', selectedConv, currentUserId] });
     }
-    queryClient.invalidateQueries({ queryKey: ['conversations'] });
-  }, [lastMessage, selectedConv, queryClient]);
+    queryClient.invalidateQueries({ queryKey: ['conversations', currentUserId] });
+  }, [lastMessage, selectedConv, currentUserId, queryClient]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -89,8 +96,8 @@ export default function MessagesPage() {
     },
     onSuccess: () => {
       setMessage('');
-      queryClient.invalidateQueries({ queryKey: ['conversation', selectedConv] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversation', selectedConv, currentUserId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations', currentUserId] });
     }
   });
 
@@ -98,7 +105,7 @@ export default function MessagesPage() {
     queryKey: ['users-search', userSearch],
     enabled: modalOpen && userSearch.length > 1,
     queryFn: async () => {
-      const { data } = await apiClient.get(`/users?search=${encodeURIComponent(userSearch)}&limit=20`);
+      const { data } = await apiClient.get(`/users/colleagues?search=${encodeURIComponent(userSearch)}&limit=20`);
       return (data?.data || []) as UserItem[];
     }
   });
@@ -111,7 +118,7 @@ export default function MessagesPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations', currentUserId] });
       closeModal();
     }
   });

@@ -41,20 +41,35 @@ export const getDepartmentById = async (id: number, organizationId?: number) => 
     ? (await db.select().from(users).where(eq(users.id, dept.managerId)).limit(1))[0]
     : null;
 
-  return { ...dept, members, roles: deptRoles, manager };
+  const director = dept.directorId
+    ? (await db.select().from(users).where(eq(users.id, dept.directorId)).limit(1))[0]
+    : null;
+
+  return { ...dept, members, roles: deptRoles, manager, director };
 };
 
-export const createDepartment = async (input: { name: string; description?: string; organizationId: number; managerId?: number }) => {
+export const createDepartment = async (input: { name: string; description?: string; type?: string; organizationId: number; managerId?: number; directorId?: number }) => {
   const [result] = await db.insert(departments).values({
     name: input.name,
     description: input.description,
+    type: input.type as any,
     organizationId: input.organizationId,
-    managerId: input.managerId
+    managerId: input.managerId,
+    directorId: input.directorId
   });
-  return getDepartmentById(result.insertId);
+  const deptId = result.insertId;
+  if (input.managerId) {
+    try { await db.insert(departmentMembers).values({ departmentId: deptId, userId: input.managerId } as any); } catch {}
+    await db.update(users).set({ departmentId: deptId }).where(eq(users.id, input.managerId));
+  }
+  if (input.directorId) {
+    try { await db.insert(departmentMembers).values({ departmentId: deptId, userId: input.directorId } as any); } catch {}
+    await db.update(users).set({ departmentId: deptId }).where(eq(users.id, input.directorId));
+  }
+  return getDepartmentById(deptId);
 };
 
-export const updateDepartment = async (id: number, input: { name?: string; description?: string; managerId?: number | null }, organizationId?: number) => {
+export const updateDepartment = async (id: number, input: { name?: string; description?: string; type?: string; managerId?: number | null; directorId?: number | null }, organizationId?: number) => {
   const where = organizationId !== undefined
     ? and(eq(departments.id, id), eq(departments.organizationId, organizationId))
     : eq(departments.id, id);
@@ -66,14 +81,20 @@ export const updateDepartment = async (id: number, input: { name?: string; descr
         throw new Error('Manager already assigned to another department');
       }
       await db.update(users).set({ departmentId: id }).where(eq(users.id, input.managerId));
+      try { await db.insert(departmentMembers).values({ departmentId: id, userId: input.managerId } as any); } catch {}
     }
   }
-  await db.update(departments).set(input).where(where);
+  if (input.directorId !== undefined) {
+    if (input.directorId) {
+      await db.update(users).set({ departmentId: id }).where(eq(users.id, input.directorId));
+      try { await db.insert(departmentMembers).values({ departmentId: id, userId: input.directorId } as any); } catch {}
+    }
+  }
+  await db.update(departments).set(input as any).where(where);
   return getDepartmentById(id, organizationId);
 };
 
 export const deleteDepartment = async (id: number, organizationId?: number) => {
-  const conditions = [eq(departmentMembers.departmentId, id)];
   const deptWhere = organizationId !== undefined
     ? and(eq(departments.id, id), eq(departments.organizationId, organizationId))
     : eq(departments.id, id);

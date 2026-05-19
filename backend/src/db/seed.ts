@@ -11,6 +11,8 @@ import {
   users,
   userPreferences,
   userRoles,
+  departments,
+  departmentMembers,
 } from './schema';
 import { eq, sql } from 'drizzle-orm';
 import { logger } from '../utils/logger';
@@ -373,18 +375,26 @@ async function ensurePublicHolidays(orgId: number) {
 }
 
 async function ensureDefaultAdmin(orgId: number) {
-  const firebaseUid = 'XB3DmkrniXUBdGwW7LOSTowItjt1';
+  const firebaseUid = process.env.SEED_ADMIN_FIREBASE_UID || 'dev-admin-uid';
   const email = 'admin@permissionmanager.com';
 
   const existing = await db
     .select()
     .from(users)
-    .where(eq(users.firebaseUid, firebaseUid))
+    .where(eq(users.email, email))
     .limit(1);
   if (existing.length > 0) {
     logger.info('Seed: default admin already exists');
     return;
   }
+
+  // Find a default department for this organization
+  const [defaultDept] = await db
+    .select()
+    .from(departments)
+    .where(eq(departments.organizationId, orgId))
+    .limit(1);
+  const departmentId = defaultDept?.id;
 
   const [result] = await db.insert(users).values({
     firebaseUid,
@@ -392,6 +402,7 @@ async function ensureDefaultAdmin(orgId: number) {
     firstName: 'Admin',
     lastName: 'User',
     organizationId: orgId,
+    departmentId,
     status: 'active',
   });
   const userId = Number(result.insertId);
@@ -412,10 +423,14 @@ async function ensureDefaultAdmin(orgId: number) {
     await db.insert(userRoles).values({ userId, roleId: superAdminRole.id });
   }
 
+  if (departmentId) {
+    await db.insert(departmentMembers).values({ userId, departmentId });
+  }
+
   logger.info('Seed: created default admin user', { userId });
 }
 
-async function ensureMissingTables() {
+async function ensureSchemaMigrations() {
   try {
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS consent_logs (
@@ -436,12 +451,30 @@ async function ensureMissingTables() {
   } catch (err) {
     logger.warn('Seed: could not ensure consent_logs table', { error: err });
   }
+
+  try {
+    const [cols] = await connection.execute(`
+      SELECT COUNT(*) as count FROM information_schema.columns
+      WHERE table_schema = DATABASE() AND table_name = 'departments' AND column_name = 'type'
+    `);
+    if ((cols as any[])[0]?.count === 0) {
+      await connection.execute(`
+        ALTER TABLE departments
+        ADD COLUMN type ENUM('department','team','unit','group','branch') DEFAULT 'department'
+      `);
+      logger.info('Seed: added departments.type column');
+    } else {
+      logger.info('Seed: departments.type column already exists');
+    }
+  } catch (err) {
+    logger.warn('Seed: could not ensure departments.type column', { error: err });
+  }
 }
 
 export async function seedDatabase() {
   try {
     logger.info('Seed: checking database state...');
-    await ensureMissingTables();
+    await ensureSchemaMigrations();
     const org = await ensureOrganization();
     await ensureModules(org.id);
     await ensurePermissions(org.id);

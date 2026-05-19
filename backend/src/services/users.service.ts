@@ -111,6 +111,13 @@ export const createUser = async (input: { email: string; firstName: string; last
   } as any);
 
   const userId = result.insertId;
+  if (input.departmentId) {
+    try {
+      await db.insert(departmentMembers).values({ departmentId: input.departmentId, userId } as any);
+    } catch (err: any) {
+      logger.warn('Failed to add user to departmentMembers (may already exist)', { userId, departmentId: input.departmentId, error: err.message });
+    }
+  }
   await db.insert(userPreferences).values({ userId, theme: 'system', density: 'normal', language: 'fr' } as any);
 
   try {
@@ -152,7 +159,7 @@ export const createUser = async (input: { email: string; firstName: string; last
   return getUserById(userId);
 };
 
-export const updateUser = async (id: number, input: { firstName?: string; lastName?: string; email?: string; phoneNumber?: string; departmentId?: number | null; status?: 'active' | 'inactive' | 'locked' | 'pending' | 'suspended' }, organizationId?: number) => {
+export const updateUser = async (id: number, input: { firstName?: string; lastName?: string; email?: string; phoneNumber?: string; departmentId?: number | null; status?: 'active' | 'inactive' | 'locked' }, organizationId?: number) => {
   const conditions = [eq(users.id, id)];
   if (organizationId !== undefined) conditions.push(eq(users.organizationId, organizationId));
 
@@ -164,6 +171,18 @@ export const updateUser = async (id: number, input: { firstName?: string; lastNa
   }
 
   await db.update(users).set(input as any).where(and(...conditions));
+
+  if (input.departmentId !== undefined) {
+    await db.delete(departmentMembers).where(eq(departmentMembers.userId, id));
+    if (input.departmentId) {
+      try {
+        await db.insert(departmentMembers).values({ departmentId: input.departmentId, userId: id } as any);
+      } catch (err: any) {
+        logger.warn('Failed to sync departmentMembers on update', { userId: id, departmentId: input.departmentId, error: err.message });
+      }
+    }
+  }
+
   await invalidateUserPermissions(id);
   return getUserById(id);
 };

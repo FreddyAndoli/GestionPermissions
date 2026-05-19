@@ -136,6 +136,7 @@ CREATE TABLE IF NOT EXISTS departments (
   organization_id INT NOT NULL,
   name VARCHAR(255) NOT NULL,
   description TEXT,
+  type ENUM('department','team','unit','group','branch') DEFAULT 'department',
   director_id INT,
   manager_id INT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -405,12 +406,19 @@ CREATE TABLE IF NOT EXISTS proxy_requests (
   proxy_user_id INT NOT NULL,
   permission_id INT NOT NULL,
   reason TEXT,
+  attachment_url VARCHAR(500),
+  attachment_name VARCHAR(255),
+  attachment_mime_type VARCHAR(100),
   beneficiary_confirmed ENUM('pending','confirmed','rejected') DEFAULT 'pending',
+  status ENUM('pending','approved','rejected') DEFAULT 'pending',
+  approved_by INT,
+  approved_at TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (beneficiary_user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (proxy_user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+  FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+  FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 24. invitations

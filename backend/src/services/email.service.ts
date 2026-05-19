@@ -1,16 +1,31 @@
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger';
 
+const GMAIL_SENDER_EMAIL = process.env.GMAIL_SENDER_EMAIL;
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
 const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
 const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
-const GMAIL_SENDER_EMAIL = process.env.GMAIL_SENDER_EMAIL;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 class EmailService {
   private transporter: nodemailer.Transporter | null = null;
 
   constructor() {
+    // Prefer App Password (SMTP) — simplest and most reliable
+    if (GMAIL_SENDER_EMAIL && GMAIL_APP_PASSWORD) {
+      this.transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: GMAIL_SENDER_EMAIL,
+          pass: GMAIL_APP_PASSWORD
+        }
+      });
+      logger.info('EmailService: Gmail SMTP (App Password) ready', { sender: GMAIL_SENDER_EMAIL });
+      return;
+    }
+
+    // Fall back to OAuth2
     if (GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET && GMAIL_REFRESH_TOKEN && GMAIL_SENDER_EMAIL) {
       this.transporter = nodemailer.createTransport({
         service: 'gmail',
@@ -22,9 +37,17 @@ class EmailService {
           refreshToken: GMAIL_REFRESH_TOKEN
         }
       });
-    } else {
-      logger.warn('EmailService: Gmail not fully configured. Transactional emails will be logged only.');
+      logger.info('EmailService: Gmail OAuth2 transporter ready', { sender: GMAIL_SENDER_EMAIL });
+      return;
     }
+
+    logger.warn('EmailService: Gmail not configured. Transactional emails will be logged only.', {
+      hasSenderEmail: !!GMAIL_SENDER_EMAIL,
+      hasAppPassword: !!GMAIL_APP_PASSWORD,
+      hasClientId: !!GMAIL_CLIENT_ID,
+      hasClientSecret: !!GMAIL_CLIENT_SECRET,
+      hasRefreshToken: !!GMAIL_REFRESH_TOKEN
+    });
   }
 
   async send(to: string, subject: string, html: string): Promise<void> {
@@ -40,8 +63,8 @@ class EmailService {
         html
       });
       logger.info('Transactional email sent', { to, subject });
-    } catch (err) {
-      logger.error('Transactional email failed', { error: err, to, subject });
+    } catch (err: any) {
+      logger.error('Transactional email failed', { error: err.message || err, to, subject, code: err.code });
       throw err;
     }
   }
